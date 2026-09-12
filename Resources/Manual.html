@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Convertify Manual</title>
+<style>
+  body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 17px; line-height: 1.5; max-width: 46em; margin: 2em auto; padding: 0 1em; color: #111; background: #fff; }
+  h1 { font-size: 2em; } h2 { font-size: 1.5em; margin-top: 2em; } h3 { font-size: 1.2em; margin-top: 1.5em; }
+  code, kbd { font-family: Menlo, monospace; font-size: 0.95em; }
+  kbd { border: 1px solid #999; border-radius: 4px; padding: 0 0.3em; }
+  nav ul { list-style: none; padding-left: 0; } nav li { margin: 0.2em 0; }
+  @media (prefers-color-scheme: dark) { body { color: #eee; background: #111; } kbd { border-color: #666; } }
+</style>
+</head>
+<body>
+
+<h1>Convertify Manual</h1>
+
+<p>Convertify converts audio and video files from the Finder. Right-click a file, choose a conversion from the Services menu, and a window shows the progress. It was built for use with VoiceOver, so everything in it can be read and operated from the keyboard.</p>
+
+<nav aria-label="Contents">
+<h2>Contents</h2>
+<ul>
+<li><a href="#origins">Origins and credits</a></li>
+<li><a href="#requirements">What you need</a></li>
+<li><a href="#install">Installing</a></li>
+<li><a href="#start">Starting a conversion</a></li>
+<li><a href="#conversions">The conversions</a></li>
+<li><a href="#naming">How output files are named</a></li>
+<li><a href="#window">The Convertify window</a></li>
+<li><a href="#keys">Menus and keyboard shortcuts</a></li>
+<li><a href="#prefs">Preferences</a></li>
+<li><a href="#notify">Notifications and sounds</a></li>
+<li><a href="#history">The history</a></li>
+<li><a href="#trouble">If something does not work</a></li>
+<li><a href="#privacy">Privacy</a></li>
+<li><a href="#disclaimer">Disclaimers and licences</a></li>
+</ul>
+</nav>
+
+<h2 id="origins">Origins and credits</h2>
+
+<p>Convertify is the Mac descendant of <strong>SendTo encoders</strong>, a Windows project started by <strong>Andre Louis</strong> (known as Onj) and further developed by <strong>arfy</strong> between 2012 and 2013. Their idea was simple and good: put encoders such as LAME, FLAC, oggenc and Opus in the Windows "Send To" menu, so a blind user could convert a file with a couple of keystrokes and no fiddling with command lines. That project is the reason this one exists, and the conversions here follow the same names and the same quality settings wherever that made sense. Their original readme is included with the app as "Original Windows SendTo readme.txt".</p>
+
+<p>The Mac version was made by Jakob Rosin in 2026, first as a set of scripts and later as this app, written together with Claude, an AI assistant from Anthropic.</p>
+
+<p>The actual encoding is done by <a href="https://ffmpeg.org">FFmpeg</a>, the <a href="https://xiph.org/flac/">FLAC</a> tools and <a href="https://xiph.org/vorbis/">vorbis-tools</a> from the Xiph.Org Foundation, and the LAME, Opus and x264 libraries. See the licences section at the end.</p>
+
+<h2 id="requirements">What you need</h2>
+
+<ul>
+<li>A Mac with Apple Silicon (M1 or later).</li>
+<li>macOS 14 Sonoma or newer.</li>
+<li>Nothing else. All the conversion tools are inside the app.</li>
+</ul>
+
+<h2 id="install">Installing</h2>
+
+<ol>
+<li>Open the disk image and drag Convertify to your Applications folder.</li>
+<li>Open Convertify once. macOS will say that it cannot verify the developer and refuse to open it. This is normal for an app that is not distributed through Apple.</li>
+<li>Open System Settings, go to Privacy and Security, scroll to the bottom of the page, and press <strong>Open Anyway</strong> next to the message about Convertify. Confirm with your password or Touch ID.</li>
+<li>Convertify opens with an empty window. You can close it. The conversions are now in the Finder Services menu.</li>
+</ol>
+
+<p>If the Services menu does not show them right away, log out and back in. macOS sometimes needs that to notice a new app's services.</p>
+
+<h2 id="start">Starting a conversion</h2>
+
+<h3>From the Finder, the usual way</h3>
+
+<ol>
+<li>Select one or more audio or video files in the Finder.</li>
+<li>Open the context menu. With VoiceOver that is <kbd>VO</kbd> <kbd>Shift</kbd> <kbd>M</kbd>; with a mouse, right-click.</li>
+<li>Open the <strong>Services</strong> submenu. The conversions are under the "Files and Folders" heading.</li>
+<li>Choose one, for example <strong>MP3 Encode</strong>.</li>
+</ol>
+
+<p>Convertify opens in front, shows the progress, plays a sound when it is finished, and quits by itself a few seconds later. If anything fails, the window stays open so you can read what went wrong.</p>
+
+<p>The same Services submenu is also in the application menu of the Finder (the menu named Finder in the menu bar), which is sometimes easier to reach with the keyboard.</p>
+
+<h3>From inside Convertify</h3>
+
+<ul>
+<li>The <strong>Convert</strong> menu lists every conversion. Choosing one opens a file chooser, and the job starts when you confirm.</li>
+<li><strong>File, Open Files</strong> (<kbd>Command</kbd> <kbd>O</kbd>) lets you pick files first and then asks which conversion to run.</li>
+</ul>
+
+<h3>By dropping files</h3>
+
+<p>Drop files on the Convertify icon in the Dock or in the Applications folder. Convertify asks which conversion to run.</p>
+
+<h3>Several files at once</h3>
+
+<p>All conversions accept several files. They are processed one after the other, and each file gets its own row in the window. Folders are skipped with a note.</p>
+
+<h2 id="conversions">The conversions</h2>
+
+<p>Every conversion accepts any audio or video file that FFmpeg can read, which is nearly everything: WAV, AIFF, FLAC, MP3, AAC and M4A, Opus, OGG, ALAC, WMA, video files, and more. Title, artist and album tags are carried over where the output format can hold them.</p>
+
+<h3>MP3 Encode</h3>
+<p>Makes an MP3 with the LAME encoder at variable bitrate quality 2, around 190 kbit/s. This is the same setting the Windows project used and is transparent for most listening.</p>
+
+<h3>MP3 Encode (Low Quality)</h3>
+<p>Makes a small MP3 at a constant 64 kbit/s. Good for speech, podcasts and anything where size matters more than fidelity.</p>
+
+<h3>AAC Encode</h3>
+<p>Makes an M4A file with AAC audio at 128 kbit/s, using Apple's own AAC encoder built into macOS. Plays everywhere Apple devices play.</p>
+
+<h3>Opus Encode</h3>
+<p>Makes an Opus file at 96 kbit/s variable bitrate, the same default the opusenc tool uses for stereo. Opus gives the best quality per kilobit of all the lossy formats here.</p>
+
+<h3>OGG Encode</h3>
+<p>Makes an Ogg Vorbis file at quality 4, around 128 kbit/s, the same setting as the Windows project.</p>
+
+<h3>File to Wav</h3>
+<p>Decodes any file to a plain WAV. The bit depth follows the source: 16-bit sources give 16-bit WAV, 24-bit sources give 24-bit, 32-bit float stays float. Lossy sources such as MP3 come out as 16-bit.</p>
+
+<h3>Flac to Wav and Delete</h3>
+<p>Decodes a FLAC file to WAV with the official FLAC tool and then <strong>deletes the FLAC file</strong>. If the FLAC was made from a WAV or AIFF with its extra metadata kept, that metadata is restored. The original is only deleted after the WAV was written successfully.</p>
+
+<h3>Wav to Flac and Delete</h3>
+<p>Compresses a WAV or AIFF to FLAC at the highest compression level, verifies the result by decoding it again, and then <strong>deletes the WAV file</strong>. 32-bit float files, which FLAC cannot store, are converted to 24-bit first. The original is only deleted after the verification passed.</p>
+
+<h3>File to MP4</h3>
+<p>Re-encodes a video to H.264 in an MP4 container at a high quality setting (CRF 18). The audio is copied unchanged if MP4 can hold it, otherwise it becomes AAC at 192 kbit/s. Only offered for video files.</p>
+
+<h3>File to MOV</h3>
+<p>The same as File to MP4, but in a QuickTime MOV container, which can also hold uncompressed audio unchanged.</p>
+
+<h3>Image + Audio to Video</h3>
+<p>Select exactly one picture and one audio file. The result is an MP4 video showing the picture for the whole length of the audio, the way people upload audio to video sites. The picture is fitted into 1280 by 720 pixels without stretching. The audio is copied if it is already AAC or MP3, otherwise it becomes AAC.</p>
+
+<h2 id="naming">How output files are named</h2>
+
+<ul>
+<li>The output goes next to the input, with the same name and the new extension. "Song.flac" becomes "Song.mp3".</li>
+<li><strong>Convertify never overwrites a file.</strong> If "Song.mp3" already exists, the new file is called "Song 2.mp3", then "Song 3.mp3", and so on.</li>
+<li>Converting a file to its own format, such as an MP3 to MP3, gives "Song converted.mp3".</li>
+<li>Only the two conversions with "and Delete" in their name remove anything, and only their own input file.</li>
+</ul>
+
+<h2 id="window">The Convertify window</h2>
+
+<p>From top to bottom the window contains:</p>
+
+<ul>
+<li><strong>A status line</strong> for the file being converted, for example "Converting Song.flac, 47 percent, about 2 minutes left".</li>
+<li><strong>A progress bar</strong> for the current file. VoiceOver reads its percentage.</li>
+<li><strong>The Files table.</strong> One row per file, newest at the top. Keyboard focus lands here when the window opens. Each row reads in this order: file name, status, progress, time started, conversion, result. The status is one of waiting, converting, done, failed, skipped or cancelled. For a finished file the progress column says how long it took, and the result column holds the name of the output file or the reason for the failure.</li>
+<li><strong>Buttons:</strong> Cancel All, Clear History and Close.</li>
+</ul>
+
+<p>The window title also carries the file name and the percentage, so switching to Convertify with <kbd>Command</kbd> <kbd>Tab</kbd> already tells you how far it is.</p>
+
+<h3>Moving around the table</h3>
+
+<ul>
+<li><kbd>Up</kbd> and <kbd>Down</kbd> arrows move one row.</li>
+<li><kbd>Home</kbd> and <kbd>End</kbd> jump to the first and last row.</li>
+<li><kbd>Page Up</kbd> and <kbd>Page Down</kbd> move a screenful.</li>
+<li><kbd>Return</kbd> opens the output file of the selected row in its default app.</li>
+<li><kbd>Delete</kbd> removes the selected finished rows from the history. The files on disk are not touched.</li>
+<li><kbd>Escape</kbd> hides the window. The app keeps running, and a running job continues.</li>
+<li><kbd>Command</kbd> <kbd>A</kbd> selects all rows, so <kbd>Command</kbd> <kbd>A</kbd> then <kbd>Delete</kbd> empties the history. Shift with the arrow keys extends the selection.</li>
+</ul>
+
+<h2 id="keys">Menus and keyboard shortcuts</h2>
+
+<h3>Convertify menu</h3>
+<ul>
+<li>About Convertify. Shows the version and where the tools, the log and the history live.</li>
+<li>Preferences, <kbd>Command</kbd> <kbd>Comma</kbd>.</li>
+<li>Quit, <kbd>Command</kbd> <kbd>Q</kbd>. If a conversion is running you are asked first.</li>
+</ul>
+
+<h3>File menu</h3>
+<ul>
+<li>Open Files, <kbd>Command</kbd> <kbd>O</kbd>. Choose files, then the conversion.</li>
+<li>Reveal Output in Finder, <kbd>Command</kbd> <kbd>R</kbd>.</li>
+<li>Open Output, <kbd>Command</kbd> <kbd>Down arrow</kbd>.</li>
+<li>Reveal Source in Finder, <kbd>Command</kbd> <kbd>Shift</kbd> <kbd>R</kbd>.</li>
+<li>Retry This File, <kbd>Command</kbd> <kbd>T</kbd>. Runs the same conversion on the selected row's source file again.</li>
+<li>Show Details, <kbd>Command</kbd> <kbd>D</kbd>. Opens a sheet with everything about the selected row: full paths, times, the complete error message. The text can be selected, and a Copy button puts it all on the clipboard.</li>
+<li>Close Window, <kbd>Command</kbd> <kbd>W</kbd>. If nothing is running and "keep the window open" is off, this quits the app.</li>
+</ul>
+
+<h3>Edit menu</h3>
+<ul>
+<li>Copy, <kbd>Command</kbd> <kbd>C</kbd>. Copies the selected rows as sentences, one per line, handy for pasting an error into a message.</li>
+<li>Select All, <kbd>Command</kbd> <kbd>A</kbd>.</li>
+<li>Remove from History, <kbd>Delete</kbd>. Works on all selected rows.</li>
+<li>Clear History, <kbd>Command</kbd> <kbd>Shift</kbd> <kbd>Delete</kbd>. Asks first unless you turn that off in Preferences.</li>
+</ul>
+
+<h3>Convert menu</h3>
+<p>One item per conversion, grouped: lossy formats first, then WAV, then the video conversions, and the two "and Delete" conversions last. Each opens a file chooser.</p>
+
+<h3>Job menu</h3>
+<ul>
+<li>Cancel This File, <kbd>Command</kbd> <kbd>Period</kbd>. Stops the current file, deletes its partial output, and goes on with the next one.</li>
+<li>Cancel All, <kbd>Command</kbd> <kbd>Shift</kbd> <kbd>Period</kbd>.</li>
+</ul>
+
+<h3>Window and Help menus</h3>
+<ul>
+<li>Show Convertify Window, <kbd>Command</kbd> <kbd>0</kbd>.</li>
+<li>Speak Status, <kbd>Command</kbd> <kbd>I</kbd>. VoiceOver announces the current progress, or the last result when nothing is running, without moving your cursor.</li>
+<li>Convertify Help shows a short summary. Convertify Manual opens this document.</li>
+<li>Open Log File and Show History File in Finder.</li>
+</ul>
+
+<h3>Context menu on a row</h3>
+<p>Right-click a row, or with VoiceOver press <kbd>VO</kbd> <kbd>Shift</kbd> <kbd>M</kbd> on it, for Open Output, Reveal Output, Reveal Source, Retry, Copy Row and Remove from History.</p>
+
+<h2 id="prefs">Preferences</h2>
+
+<p>Open with <kbd>Command</kbd> <kbd>Comma</kbd>. Two tabs, General and History. Changes take effect immediately.</p>
+
+<h3>General</h3>
+<ul>
+<li><strong>Keep the window open after jobs finish.</strong> Off by default: the app quits by itself after a successful job.</li>
+<li><strong>After a successful job, quit after.</strong> A choice of 3, 6, 10, 15 or 30 seconds. Six by default.</li>
+<li><strong>Bring the window to the front when a job starts.</strong> On by default. Turn it off if you prefer the window to appear without taking your keyboard focus; you can still reach it with <kbd>Command</kbd> <kbd>Tab</kbd>.</li>
+<li><strong>Show a notification when a job finishes.</strong></li>
+<li><strong>Play a sound when a job finishes.</strong> Glass for success, Sosumi for failure.</li>
+</ul>
+
+<h3>History</h3>
+<ul>
+<li><strong>Keep at most.</strong> 25, 50, 100 or 200 finished files, or no limit. Fifty by default.</li>
+<li><strong>Drop old entries.</strong> Never, or after 7, 30 or 90 days.</li>
+<li><strong>Ask before clearing the history.</strong></li>
+<li><strong>Clear the history when Convertify quits.</strong> Off by default. With it on, the table is empty on every launch and only shows the current job.</li>
+</ul>
+
+<p>Whatever the settings, the window always stays open when a file has failed.</p>
+
+<h2 id="notify">Notifications and sounds</h2>
+
+<p>When a job ends you get a notification with the name of the conversion and either "Done" with the output name, or the number of failed files and the first reason. VoiceOver reads it. Because the app is not signed by Apple, macOS does not let it send notifications directly, so they arrive through the system's script notification channel and show the Script Editor icon. That is expected.</p>
+
+<p>There are no notifications or announcements while a job is running. Open the window when you want to know how far it is.</p>
+
+<h2 id="history">The history</h2>
+
+<p>Finished, failed, skipped and cancelled files stay in the table so you can find results later. The list is saved between launches in a small file in your Library folder. Trim it with the Delete key, the Clear History button, or the automatic limits in Preferences. Clearing the history never deletes any converted file.</p>
+
+<h2 id="trouble">If something does not work</h2>
+
+<h3>The conversions are not in the Services menu</h3>
+<ul>
+<li>Make sure Convertify has been opened at least once after installing.</li>
+<li>Log out and back in. Finder caches the Services menu.</li>
+<li>Check that the entries are enabled: System Settings, Keyboard, Keyboard Shortcuts, Services. They are under Files and Folders.</li>
+<li>Only conversions that fit the selected file are shown. File to MP4 and File to MOV appear only for videos, and Image + Audio to Video needs a picture or a sound file.</li>
+</ul>
+
+<h3>"Encode Selected Audio Files" only offers AAC</h3>
+<p>That entry is Apple's own built-in service, not part of Convertify. Ignore it, or turn it off in the same Services settings.</p>
+
+<h3>macOS asks whether Convertify may access a folder</h3>
+<p>The first time Convertify reads a file in Downloads, Desktop, Documents or a cloud folder, macOS asks for permission. Allow it, once per folder.</p>
+
+<h3>A file failed</h3>
+<p>Read the result column of its row, or copy the row with <kbd>Command</kbd> <kbd>C</kbd>. The most common reasons: the file is not a media file, it is damaged, or a video conversion was attempted on an audio-only file. More detail is in the log, reachable from the Help menu.</p>
+
+<h3>Convertify quit while a conversion was running</h3>
+<p>Check that "keep the window open" behaves as you expect and that you did not press <kbd>Command</kbd> <kbd>Q</kbd>. A cancelled or interrupted conversion always deletes its partial output, so there are no half files left behind.</p>
+
+<h2 id="privacy">Privacy</h2>
+
+<p>Convertify never connects to the internet, sends nothing anywhere, and collects nothing. The only things it writes are the converted files next to your originals, a log file and a history file in your own Library folder, and its preferences.</p>
+
+<h2 id="disclaimer">Disclaimers and licences</h2>
+
+<h3>Use at your own risk</h3>
+<p>Convertify is provided as is, without any warranty. It is a personal tool shared between friends, not a commercial product, and nobody promises that it is free of mistakes. Keep backups of files you care about. The two "and Delete" conversions remove their input file on purpose; do not use them on your only copy of a recording.</p>
+
+<h3>Not from Apple</h3>
+<p>Convertify is not affiliated with, endorsed by or supported by Apple. It is signed only locally, which is why macOS asks you to allow it the first time.</p>
+
+<h3>Open source components</h3>
+<p>Convertify bundles unmodified builds of the following programs and libraries, all of which remain under their own licences and belong to their authors:</p>
+<ul>
+<li>FFmpeg and its libraries, under the GNU General Public License version 3, because this build includes the x264 encoder.</li>
+<li>LAME MP3 encoder, under the GNU Lesser General Public License.</li>
+<li>Opus, under a BSD-style licence.</li>
+<li>x264, under the GNU General Public License.</li>
+<li>FLAC tools and libraries from Xiph.Org, under BSD and GPL licences.</li>
+<li>vorbis-tools (oggenc) and libvorbis from Xiph.Org, under GPL and BSD licences.</li>
+</ul>
+<p>Their source code is available from the projects' websites, and the Homebrew package manager was used to obtain the builds. If you pass Convertify on, pass on this notice with it.</p>
+
+<h3>Thanks</h3>
+<p>To Andre Louis and arfy for starting it all, and to the FFmpeg and Xiph.Org developers whose work does the real job.</p>
+
+<p><em>Convertify 1.2, September 2026.</em></p>
+
+</body>
+</html>

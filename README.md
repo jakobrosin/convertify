@@ -1,0 +1,100 @@
+# Convertify
+
+Finder Services that convert audio and video with ffmpeg, showing a live progress window.
+Installed at /Applications/Convertify.app. Rebuild and reinstall with `./build.sh`.
+
+- Presets are defined in `Sources/main.swift` (`Preset.all`) and mirrored as service
+  entries in `build.sh` (`svc ...`). Keep both lists in sync.
+- Tools come from Homebrew: ffmpeg (with libmp3lame, libopus, aac_at), oggenc, flac.
+- Log: ~/Library/Logs/Convertify.log (auto-trimmed at 1 MB).
+- Test from the command line: `open -a /Applications/Convertify.app --args --preset mp3 /path/file.flac`
+- Behaviour: window opens in front when a job starts, quits by itself 6 s after the last
+  successful job, stays open on failure. Never overwrites: clashes get " 2", same-format
+  conversions get " converted". Sources are deleted only by the two "and Delete" presets,
+  after the flac tool has verified the result.
+
+## Window
+
+One table named "Files", one row per file, newest first, columns in this order:
+File, Status, Progress (percent and time left, or "took N seconds"), Started, Action, Result
+(output name or error). Keyboard focus lands in the table when the window opens.
+Arrow keys, Home, End, Page Up, Page Down move through rows. Return opens the output,
+Delete removes a finished row. Finished rows persist in
+~/Library/Application Support/Convertify/history.json, pruned by the preferences.
+
+## Menus and shortcuts
+
+- File: Open Files (Cmd O, then choose the conversion), Reveal Output (Cmd R), Open Output
+  (Cmd Down), Reveal Source (Cmd Shift R), Retry This File (Cmd T), Close Window (Cmd W).
+- Edit: Copy (Cmd C copies the selected row as a sentence), Remove from History (Delete),
+  Clear History (Cmd Shift Delete, asks first unless turned off in Preferences).
+- Convert: one item per preset; opens a file chooser and starts the job.
+- Job: Cancel This File (Cmd Period), Cancel All (Cmd Shift Period).
+- Convertify: Preferences (Cmd Comma), About (shows tool paths and file locations).
+- Help: Convertify Help, Open Log File, Show History File in Finder.
+- Right-click on a row gives the same row actions as a context menu.
+- Dropping files on the Dock icon asks which conversion to run.
+
+## Preferences (UserDefaults, domain com.jakobrosin.convertify)
+
+keepWindowOpen (false), quitDelay seconds (6), bringToFront (true), notifyOnFinish (true),
+soundOnFinish (true), historyLimit (50, 0 = unlimited), historyDays (0 = never), confirmClear (true).
+The window stays open on any failure regardless of keepWindowOpen.
+
+## Notifications
+
+macOS refuses UserNotifications permission for this locally signed app, so the finish message
+is sent with `osascript display notification`. It appears under the Script Editor icon with the
+title of the action. Sounds are played by the app itself.
+
+## Gotcha
+
+Do not bind Escape to a button in this app: AppKit also routes Cmd Period to an Escape-bound
+button, which used to quit the app during a running job.
+
+## Service registration gotchas (learned the hard way)
+
+- Every NSServices entry needs `NSRequiredContext` with `NSServiceCategory` = "Files and Folders",
+  otherwise Finder's Services menu silently drops it even though `pbs -dump` lists it.
+- Never leave a second copy of the app bundle around (e.g. in build/): LaunchServices may
+  register that copy instead and the services disappear. build.sh removes the build copy after
+  installing and unregisters it.
+- After changing services: `pbs -flush; pbs -update` and relaunch Finder (`killall Finder`).
+
+## Self-contained build and sharing
+
+`build.sh` copies ffmpeg, ffprobe, oggenc and flac from Homebrew into Contents/MacOS and every
+library they need into Contents/Frameworks (tools/bundle_tools.py rewrites the load paths and
+re-signs). The app looks for tools inside itself first, then Homebrew. About 38 MB, Apple Silicon only
+(built on this Mac; an Intel build would need the same done on an Intel Mac or a universal ffmpeg).
+
+`make_dmg.sh` produces Convertify.dmg (about 18 MB) with the app, an Applications link and a
+"Read me first" note. Recipients: drag to Applications, open once, then System Settings, Privacy and
+Security, Open Anyway. The app is only ad-hoc signed, so that step is required on every Mac.
+
+Licensing note: the bundled ffmpeg includes x264 (GPL). Fine for sharing with friends; a public
+release would need to switch File to MP4/MOV to h264_videotoolbox and rebuild ffmpeg without GPL parts.
+
+## Manual
+
+Resources/Manual.html is the user manual (accessible HTML, proper headings). It is copied into the
+app (Help menu, "Convertify Manual") and into the DMG. "Original Windows SendTo readme.txt" is the
+2012/2013 readme of the Windows SendTo encoders project by Andre Louis (Onj) and arfy that started
+all this; it is bundled and credited in the manual. Update the version line at the end of the manual
+together with CFBundleShortVersionString in build.sh and the About panel in app.swift.
+
+## First launch
+
+0.7 s after launch the app shows, as sheets on the main window: an offer to move leftover
+script-era Automator workflows (matched by menu title in ~/Library/Services) to the Trash, then a
+welcome sheet with "Relaunch Finder Now". Flags `welcomed` and `oldServicesChecked` in UserDefaults;
+delete them to see the sheets again. Both flows are also in the Help menu. Testing note: if the
+screen is locked, System Events sees no windows for any app and nothing can activate.
+
+## 1.2 polish
+
+Preferences has two tabs (General, History) and pop-ups instead of number fields. Cmd I posts an
+accessibility announcement of the current status (Speak Status). Cmd D opens a Show Details sheet
+for the selected row with full paths, times and message, plus a Copy button. Escape in the table
+hides the window without quitting. The Convert menu is grouped: lossy, WAV, video, "and Delete".
+Cmd A selects all rows; Delete removes all selected finished rows.
