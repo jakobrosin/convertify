@@ -1229,7 +1229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let ff = findTool("ffmpeg") ?? "not found"
         let credits = NSAttributedString(string: "Converts audio and video from the Finder Services menu.\n\nDescended from the Windows SendTo encoders by Andre Louis (github.com/OnjLouis) and arfy.\nSource and updates: github.com/jakobrosin/convertify\nUpdater based on Clipman by Andre Louis.\nMIT licence for Convertify; bundled tools keep their own licences, see the manual.\n\nffmpeg: \(ff)\noggenc: \(findTool("oggenc") ?? "not found")\nflac: \(findTool("flac") ?? "not found")\n\nLog: \(Log.url.path)\nHistory: \(History.url.path)")
         NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits, .applicationName: "Convertify", .applicationVersion: "1.4"])
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits, .applicationName: "Convertify", .applicationVersion: "1.5"])
     }
     @objc func showHelp(_ sender: Any?) {
         let a = NSAlert()

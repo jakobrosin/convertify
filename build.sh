@@ -37,8 +37,8 @@ cat <<P
   <key>CFBundleName</key><string>Convertify</string>
   <key>CFBundleDisplayName</key><string>Convertify</string>
   <key>CFBundleIdentifier</key><string>com.jakobrosin.convertify</string>
-  <key>CFBundleVersion</key><string>1.4</string>
-  <key>CFBundleShortVersionString</key><string>1.4</string>
+  <key>CFBundleVersion</key><string>1.5</string>
+  <key>CFBundleShortVersionString</key><string>1.5</string>
   <key>CFBundleExecutable</key><string>Convertify</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
