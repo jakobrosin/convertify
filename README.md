@@ -1,6 +1,27 @@
 # Convertify
 
-Finder Services that convert audio and video with ffmpeg, showing a live progress window.
+Finder Services that convert audio and video on the Mac, with a live progress window built for VoiceOver.
+Right-click a file, pick "MP3 Encode", "File to Wav", "Extract Audio" and so on from the Services menu.
+
+Convertify is the Mac descendant of **SendTo encoders**, the Windows project by
+[Andre Louis](https://github.com/OnjLouis) (Onj) and arfy, started in 2012 and still maintained by Andre.
+The conversion names, quality settings and several 2026 features (remux before re-encoding, lossless
+audio extraction, MKV and image conversions, media reports, the output naming scheme) come from there.
+The Mac version was written by Jakob Rosin in 2026 together with Claude (Anthropic).
+
+Download: the latest `Convertify.dmg` under [Releases](https://github.com/jakobrosin/convertify/releases).
+Apple Silicon, macOS 14 or newer. Not notarized: after the first launch, allow it under
+System Settings, Privacy and Security, Open Anyway. The full user manual is in the DMG and in the app's Help menu.
+
+## Licence
+
+Convertify's own code is MIT licensed (see LICENSE). The DMG bundles unmodified builds of FFmpeg
+(GPL, because x264 is included), LAME (LGPL), Opus (BSD), x264 (GPL), FLAC (BSD/GPL) and vorbis-tools
+(GPL), obtained through Homebrew; they keep their own licences and their sources are available from
+their projects. Convertify runs them as separate programs.
+
+## Building
+
 Installed at /Applications/Convertify.app. Rebuild and reinstall with `./build.sh`.
 
 - Presets are defined in `Sources/main.swift` (`Preset.all`) and mirrored as service
@@ -78,9 +99,7 @@ release would need to switch File to MP4/MOV to h264_videotoolbox and rebuild ff
 ## Manual
 
 Resources/Manual.html is the user manual (accessible HTML, proper headings). It is copied into the
-app (Help menu, "Convertify Manual") and into the DMG. "Original Windows SendTo readme.txt" is the
-2012/2013 readme of the Windows SendTo encoders project by Andre Louis (Onj) and arfy that started
-all this; it is bundled and credited in the manual. Update the version line at the end of the manual
+app (Help menu, "Convertify Manual") and into the DMG. Update the version line at the end of the manual
 together with CFBundleShortVersionString in build.sh and the About panel in app.swift.
 
 ## First launch
@@ -114,6 +133,7 @@ Cmd A selects all rows; Delete removes all selected finished rows.
 - Check for Updates: reads a JSON manifest (defaults key updateManifestURL, see make_dmg.sh which writes
   convertify-update.json with version/url/sha256/size/notes), verifies size + SHA-256 (CryptoKit), mounts
   the DMG, stages the app, replaces /Applications/Convertify.app via a detached shell and relaunches.
-  Host Convertify.dmg and convertify-update.json somewhere and set CONVERTIFY_DOWNLOAD_URL when running
-  make_dmg.sh; users set the manifest address with:
-  defaults write com.jakobrosin.convertify updateManifestURL "https://.../convertify-update.json"
+  The default manifest address is the latest GitHub release asset; `make_dmg.sh` writes the manifest with
+  the matching download URL. A release is: bump the version in build.sh, app.swift (About) and the manual,
+  `./build.sh && ./make_dmg.sh`, then `gh release create vX.Y Convertify.dmg convertify-update.json`.
+  A user can point the app elsewhere with `defaults write com.jakobrosin.convertify updateManifestURL ...`.

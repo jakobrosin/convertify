@@ -81,7 +81,7 @@ P
 } > "$BUILD/Convertify.app/Contents/Info.plist"
 plutil -lint "$BUILD/Convertify.app/Contents/Info.plist"
 echo "APPL????" > "$BUILD/Convertify.app/Contents/PkgInfo"
-cp Resources/Manual.html "Resources/Original Windows SendTo readme.txt" "$BUILD/Convertify.app/Contents/Resources/"
+cp Resources/Manual.html "$BUILD/Convertify.app/Contents/Resources/"
 
 echo "bundling ffmpeg, ffprobe, oggenc, flac and their libraries..."
 python3 tools/bundle_tools.py "$BUILD/Convertify.app" ffmpeg ffprobe oggenc flac

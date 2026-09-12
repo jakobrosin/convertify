@@ -7,7 +7,6 @@ STAGE="build/dmg"; rm -rf "$STAGE"; mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 cp Resources/Manual.html "$STAGE/Convertify Manual.html"
-cp "Resources/Original Windows SendTo readme.txt" "$STAGE/"
 cat > "$STAGE/Read me first.txt" <<'T'
 Convertify
 
@@ -21,7 +20,8 @@ Everything needed is inside the app. Nothing else has to be installed.
 
 The full manual is in this disk image as "Convertify Manual.html" and also inside the app,
 under the Help menu. Convertify descends from the Windows "SendTo encoders" project by
-Andre Louis and arfy; their original readme is included too.
+Andre Louis (https://github.com/OnjLouis) and arfy.
+Source and updates: https://github.com/jakobrosin/convertify
 T
 rm -f Convertify.dmg
 hdiutil create -volname Convertify -srcfolder "$STAGE" -ov -format UDZO Convertify.dmg >/dev/null
@@ -30,7 +30,7 @@ rm -rf "$STAGE"
 VERSION=$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")
 SHA=$(shasum -a 256 Convertify.dmg | cut -d' ' -f1); SIZE=$(stat -f %z Convertify.dmg)
 cat > convertify-update.json <<J
-{"version": "$VERSION", "url": "${CONVERTIFY_DOWNLOAD_URL:-https://example.com/Convertify.dmg}", "sha256": "$SHA", "size": $SIZE,
+{"version": "$VERSION", "url": "${CONVERTIFY_DOWNLOAD_URL:-https://github.com/jakobrosin/convertify/releases/latest/download/Convertify.dmg}", "sha256": "$SHA", "size": $SIZE,
  "notes": ["See the manual in the Help menu for what is new."]}
 J
 echo "update manifest: convertify-update.json (set CONVERTIFY_DOWNLOAD_URL before running to fill in the real download address)"

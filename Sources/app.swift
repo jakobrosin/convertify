@@ -851,7 +851,8 @@ enum Maintenance {
 
     // MARK: Check for Updates
     // Manifest: {"version":"1.4","url":"https://.../Convertify.dmg","sha256":"...","size":123,"notes":["..."]}
-    static var manifestURL: String { Prefs.d.string(forKey: "updateManifestURL") ?? "" }
+    static let defaultManifestURL = "https://github.com/jakobrosin/convertify/releases/latest/download/convertify-update.json"
+    static var manifestURL: String { Prefs.d.string(forKey: "updateManifestURL") ?? defaultManifestURL }
 
     static func checkForUpdates(on window: NSWindow, quiet: Bool = false) {
         guard let url = URL(string: manifestURL), !manifestURL.isEmpty else {
@@ -1226,7 +1227,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         menu("Help") { m in
             item(m, "Convertify Help", #selector(showHelp(_:)), "?")
             item(m, "Convertify Manual", #selector(showManual(_:)))
-            item(m, "Original Windows SendTo Readme", #selector(showOriginalReadme(_:)))
+            item(m, "Convertify on GitHub", #selector(openGitHub(_:)))
             item(m, "Open Log File", #selector(openLog(_:)))
             m.addItem(.separator())
             item(m, "Remove Old SendTo Encoder Services…", #selector(removeOldServices(_:)))
@@ -1334,7 +1335,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
     @objc func showAbout(_ sender: Any?) {
         let ff = findTool("ffmpeg") ?? "not found"
-        let credits = NSAttributedString(string: "Converts audio and video from the Finder Services menu.\n\nffmpeg: \(ff)\noggenc: \(findTool("oggenc") ?? "not found")\nflac: \(findTool("flac") ?? "not found")\n\nLog: \(Log.url.path)\nHistory: \(History.url.path)")
+        let credits = NSAttributedString(string: "Converts audio and video from the Finder Services menu.\n\nDescended from the Windows SendTo encoders by Andre Louis (github.com/OnjLouis) and arfy.\nSource and updates: github.com/jakobrosin/convertify\nMIT licence for Convertify; bundled tools keep their own licences, see the manual.\n\nffmpeg: \(ff)\noggenc: \(findTool("oggenc") ?? "not found")\nflac: \(findTool("flac") ?? "not found")\n\nLog: \(Log.url.path)\nHistory: \(History.url.path)")
         NSApp.activate(ignoringOtherApps: true)
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits, .applicationName: "Convertify", .applicationVersion: "1.3"])
     }
@@ -1359,6 +1360,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         a.runModal()
     }
     @objc func openLog(_ sender: Any?) { NSWorkspace.shared.open(Log.url) }
+    @objc func openGitHub(_ sender: Any?) { NSWorkspace.shared.open(URL(string: "https://github.com/jakobrosin/convertify")!) }
     @objc func hideWindow(_ sender: Any?) { windowController.window?.orderOut(nil) }
 
     /// Have VoiceOver announce the current status without moving focus.
@@ -1410,9 +1412,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     @objc func relaunchFinder(_ sender: Any?) { FirstLaunch.refreshServices(); FirstLaunch.relaunchFinder() }
     @objc func showManual(_ sender: Any?) {
         if let u = Bundle.main.url(forResource: "Manual", withExtension: "html") { NSWorkspace.shared.open(u) } else { NSSound.beep() }
-    }
-    @objc func showOriginalReadme(_ sender: Any?) {
-        if let u = Bundle.main.url(forResource: "Original Windows SendTo readme", withExtension: "txt") { NSWorkspace.shared.open(u) } else { NSSound.beep() }
     }
     @objc func revealHistory(_ sender: Any?) { NSWorkspace.shared.activateFileViewerSelecting([History.url]) }
 
