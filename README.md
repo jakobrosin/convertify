@@ -1,151 +1,53 @@
 # Convertify
 
-Finder Services that convert audio and video on the Mac, with a live progress window built for VoiceOver.
-Right-click a file, pick "MP3 Encode", "File to Wav", "Extract Audio" and so on from the Services menu.
+Convert audio and video files straight from the Finder, with the keyboard, without ever opening a converter app.
 
-Convertify is the Mac descendant of **SendTo encoders**, the Windows project by
-[Andre Louis](https://github.com/OnjLouis) (Onj) and arfy, started in 2012 and still maintained by Andre.
-The conversion names, quality settings and several 2026 features (remux before re-encoding, lossless
-audio extraction, MKV and image conversions, media reports, the output naming scheme) come from there.
-The in-app updater is based on the one in Andre's [Clipman](https://github.com/OnjLouis/Clipman) (MIT).
-The Mac version was written by Jakob Rosin in 2026 together with Claude (Anthropic).
+Select a file, open the context menu, go to Services, and choose what you want: MP3 Encode, File to Wav, Extract Audio, File to MP4, Image to JPEG and so on. A small window shows the progress, plays a sound when it is done, and gets out of the way. Everything is built to be read and operated with VoiceOver.
 
-Download: the latest `Convertify.dmg` under [Releases](https://github.com/jakobrosin/convertify/releases).
-Apple Silicon, macOS 14 or newer. Not notarized: after the first launch, allow it under
-System Settings, Privacy and Security, Open Anyway. The full user manual is in the DMG and in the app's Help menu.
+## Why this exists
+
+Converting a recording used to mean opening a converter, finding the file again in its dialog, picking a format from a list of options you have to read through every time, and then finding the output. For a blind user that is a lot of steps for something you do ten times a day.
+
+On Windows, [Andre Louis](https://github.com/OnjLouis) and arfy solved this in 2012 with **SendTo encoders**: a set of shortcuts in the Send To menu that ran LAME, FLAC, oggenc and Opus with sensible settings, so a conversion was two keystrokes away and never needed a dialog. Andre has kept that project alive ever since. Convertify brings the same idea to the Mac, with the same conversion names and quality settings, and adds a progress window, a history, and self-updating.
+
+## What it does
+
+Sixteen conversions in the Finder Services menu:
+
+- **Lossy audio:** MP3 Encode, MP3 Encode (Low Quality), AAC Encode, Opus Encode, OGG Encode.
+- **Lossless and raw:** File to Wav, Extract Audio, which takes the audio out of a video without re-encoding it, Flac to Wav and Delete, Wav to Flac and Delete.
+- **Video:** File to MP4, File to MOV, File to MKV, Image + Audio to Video. Streams are copied without re-encoding whenever the target container can hold them, so most of these take seconds.
+- **Images:** Image to JPEG, Image to PNG.
+- **Media Info:** a spoken-friendly report of what a file contains.
+
+Every conversion accepts several files at once and any input format FFmpeg can read. Nothing is ever overwritten: a clash gets a numbered "-converted" name, and only the two conversions with "and Delete" in their name remove a source file, after the result has been verified.
+
+The progress window is one table, one row per file: name, status, progress with time left, when it started, which conversion, and the result. Arrow keys, Home and End move through it, Return opens the output, Delete removes a row from the history, Command-I speaks the current status, Command-D shows the full details of a row. Finished files stay in the history so you can find results later.
+
+## Installing
+
+1. Download the latest `Convertify.dmg` from [Releases](https://github.com/jakobrosin/convertify/releases) and drag Convertify to your Applications folder.
+2. Open it once. macOS will refuse, because the app is not from an identified developer. Open System Settings, go to Privacy and Security, scroll down, and choose **Open Anyway**.
+3. The conversions are now in the Finder Services menu. If they do not show up right away, the welcome message offers to relaunch the Finder.
+
+Requirements: a Mac with Apple Silicon and macOS 14 or newer. Nothing else to install; FFmpeg and the other tools are inside the app.
+
+Convertify checks for new versions once a day when it starts and asks before installing. Updates replace the app in place and leave nothing behind. Both behaviours can be changed in Preferences.
+
+The full manual is inside the disk image and in the app's Help menu. It covers every conversion, every shortcut, the preferences, and what to do when something does not work.
+
+## Contributing and building
+
+Convertify is a small Swift app with no dependencies beyond Xcode's command line tools and Homebrew. See [DEVELOPING.md](DEVELOPING.md) for how it is built, how the Finder services are registered, how a release is made, and the traps that cost time along the way.
+
+## Credits
+
+- **Andre Louis** ([github.com/OnjLouis](https://github.com/OnjLouis)) and **arfy** created and maintain SendTo encoders, the Windows project Convertify descends from. The conversion names, the quality settings, the output naming scheme and several 2026 features such as copying streams instead of re-encoding, lossless audio extraction, the MKV and image conversions and the media report come from there. The in-app updater is based on the one in Andre's [Clipman](https://github.com/OnjLouis/Clipman).
+- **Jakob Rosin** wrote the Mac version in 2026, together with Claude, an AI assistant from Anthropic.
+- The real work is done by [FFmpeg](https://ffmpeg.org), [LAME](https://lame.sourceforge.io), [Opus](https://opus-codec.org), [x264](https://www.videolan.org/developers/x264.html), and [FLAC](https://xiph.org/flac/) and [vorbis-tools](https://xiph.org/vorbis/) from the Xiph.Org Foundation.
 
 ## Licence
 
-Convertify's own code is MIT licensed (see LICENSE). The DMG bundles unmodified builds of FFmpeg
-(GPL, because x264 is included), LAME (LGPL), Opus (BSD), x264 (GPL), FLAC (BSD/GPL) and vorbis-tools
-(GPL), obtained through Homebrew; they keep their own licences and their sources are available from
-their projects. Convertify runs them as separate programs.
+Convertify's own code is released under the MIT licence, see [LICENSE](LICENSE).
 
-## Building
-
-Installed at /Applications/Convertify.app. Rebuild and reinstall with `./build.sh`.
-
-- Presets are defined in `Sources/main.swift` (`Preset.all`) and mirrored as service
-  entries in `build.sh` (`svc ...`). Keep both lists in sync.
-- Tools come from Homebrew: ffmpeg (with libmp3lame, libopus, aac_at), oggenc, flac.
-- Log: ~/Library/Logs/Convertify.log (auto-trimmed at 1 MB).
-- Test from the command line: `open -a /Applications/Convertify.app --args --preset mp3 /path/file.flac`
-- Behaviour: window opens in front when a job starts, quits by itself 6 s after the last
-  successful job, stays open on failure. Never overwrites: clashes get " 2", same-format
-  conversions get " converted". Sources are deleted only by the two "and Delete" presets,
-  after the flac tool has verified the result.
-
-## Window
-
-One table named "Files", one row per file, newest first, columns in this order:
-File, Status, Progress (percent and time left, or "took N seconds"), Started, Action, Result
-(output name or error). Keyboard focus lands in the table when the window opens.
-Arrow keys, Home, End, Page Up, Page Down move through rows. Return opens the output,
-Delete removes a finished row. Finished rows persist in
-~/Library/Application Support/Convertify/history.json, pruned by the preferences.
-
-## Menus and shortcuts
-
-- File: Open Files (Cmd O, then choose the conversion), Reveal Output (Cmd R), Open Output
-  (Cmd Down), Reveal Source (Cmd Shift R), Retry This File (Cmd T), Close Window (Cmd W).
-- Edit: Copy (Cmd C copies the selected row as a sentence), Remove from History (Delete),
-  Clear History (Cmd Shift Delete, asks first unless turned off in Preferences).
-- Convert: one item per preset; opens a file chooser and starts the job.
-- Job: Cancel This File (Cmd Period), Cancel All (Cmd Shift Period).
-- Convertify: Preferences (Cmd Comma), About (shows tool paths and file locations).
-- Help: Convertify Help, Open Log File, Show History File in Finder.
-- Right-click on a row gives the same row actions as a context menu.
-- Dropping files on the Dock icon asks which conversion to run.
-
-## Preferences (UserDefaults, domain com.jakobrosin.convertify)
-
-keepWindowOpen (false), quitDelay seconds (6), bringToFront (true), notifyOnFinish (true),
-soundOnFinish (true), historyLimit (50, 0 = unlimited), historyDays (0 = never), confirmClear (true).
-The window stays open on any failure regardless of keepWindowOpen.
-
-## Notifications
-
-macOS refuses UserNotifications permission for this locally signed app, so the finish message
-is sent with `osascript display notification`. It appears under the Script Editor icon with the
-title of the action. Sounds are played by the app itself.
-
-## Gotcha
-
-Do not bind Escape to a button in this app: AppKit also routes Cmd Period to an Escape-bound
-button, which used to quit the app during a running job.
-
-## Service registration gotchas (learned the hard way)
-
-- Every NSServices entry needs `NSRequiredContext` with `NSServiceCategory` = "Files and Folders",
-  otherwise Finder's Services menu silently drops it even though `pbs -dump` lists it.
-- Never leave a second copy of the app bundle around (e.g. in build/): LaunchServices may
-  register that copy instead and the services disappear. build.sh removes the build copy after
-  installing and unregisters it.
-- After changing services: `pbs -flush; pbs -update` and relaunch Finder (`killall Finder`).
-
-## Self-contained build and sharing
-
-`build.sh` copies ffmpeg, ffprobe, oggenc and flac from Homebrew into Contents/MacOS and every
-library they need into Contents/Frameworks (tools/bundle_tools.py rewrites the load paths and
-re-signs). The app looks for tools inside itself first, then Homebrew. About 38 MB, Apple Silicon only
-(built on this Mac; an Intel build would need the same done on an Intel Mac or a universal ffmpeg).
-
-`make_dmg.sh` produces Convertify.dmg (about 18 MB) with the app, an Applications link and a
-"Read me first" note. Recipients: drag to Applications, open once, then System Settings, Privacy and
-Security, Open Anyway. The app is only ad-hoc signed, so that step is required on every Mac.
-
-Licensing note: the bundled ffmpeg includes x264 (GPL). Fine for sharing with friends; a public
-release would need to switch File to MP4/MOV to h264_videotoolbox and rebuild ffmpeg without GPL parts.
-
-## Manual
-
-Resources/Manual.html is the user manual (accessible HTML, proper headings). It is copied into the
-app (Help menu, "Convertify Manual") and into the DMG. Update the version line at the end of the manual
-together with CFBundleShortVersionString in build.sh and the About panel in app.swift.
-
-## First launch
-
-0.7 s after launch the app shows, as sheets on the main window: an offer to move leftover
-script-era Automator workflows (matched by menu title in ~/Library/Services) to the Trash, then a
-welcome sheet with "Relaunch Finder Now". Flags `welcomed` and `oldServicesChecked` in UserDefaults;
-delete them to see the sheets again. Both flows are also in the Help menu. Testing note: if the
-screen is locked, System Events sees no windows for any app and nothing can activate.
-
-## 1.2 polish
-
-Preferences has two tabs (General, History) and pop-ups instead of number fields. Cmd I posts an
-accessibility announcement of the current status (Speak Status). Cmd D opens a Show Details sheet
-for the selected row with full paths, times and message, plus a Copy button. Escape in the table
-hides the window without quitting. The Convert menu is grouped: lossy, WAV, video, "and Delete".
-Cmd A selects all rows; Delete removes all selected finished rows.
-
-## 1.3 (adopted from Andre Louis's SendTo encoders, September 2026 release)
-
-- Output naming now matches SendTo: name.ext, name-converted.ext, name-converted-2.ext...
-- File to MP4/MOV copies the video stream when the container can hold it (codec whitelist), re-encodes only
-  incompatible audio to AAC; otherwise h264_videotoolbox, then libx264.
-- New: File to MKV (lossless remux, fallback without data streams), Extract Audio (codec-aware extension,
-  -c:a copy, verified), Image to JPEG / PNG (sips; WebP not possible: no encoder available), Media Info
-  (ffprobe JSON rendered as speech-friendly text; service + Cmd Shift I + Convert menu).
-- Chapters mapped on all ffmpeg presets; every output verified with ffprobe; flac uses -j threads.
-- Maintenance on launch: on version change re-register with LaunchServices, refresh pbs, delete stale temp
-  files; offer to trash duplicate copies (found via LaunchServices); offer to install into /Applications when
-  run from a DMG or Downloads.
-- Check for Updates: reads a JSON manifest (defaults key updateManifestURL, see make_dmg.sh which writes
-  convertify-update.json with version/url/sha256/size/notes), verifies size + SHA-256 (CryptoKit), mounts
-  the DMG, stages the app, replaces /Applications/Convertify.app via a detached shell and relaunches.
-  The default manifest address is the latest GitHub release asset; `make_dmg.sh` writes the manifest with
-  the matching download URL. A release is: bump the version in build.sh, app.swift (About) and the manual,
-  `./build.sh && ./make_dmg.sh`, then `gh release create vX.Y Convertify.dmg convertify-update.json`.
-  A user can point the app elsewhere with `defaults write com.jakobrosin.convertify updateManifestURL ...`.
-
-## 1.4
-
-Updater rewritten after Clipman's UpdateService (Andre Louis, MIT): discovers releases through the GitHub
-Releases API (newest non-draft, non-prerelease with a Convertify zip or dmg asset), verifies the asset with
-the SHA-256 digest GitHub publishes, unpacks, runs codesign --verify and checks the bundle identifier, then a
-zsh script waits for the app to quit, replaces /Applications/Convertify.app, re-registers services, relaunches
-and removes the staging folder. Daily automatic check at launch (pref) and silent install (pref). Version
-History menu item. make_dmg.sh also produces Convertify-macos-<version>.zip; upload dmg + zip (+ the manifest
-once more, for 1.3 users) to each release:
-gh release create vX.Y Convertify.dmg Convertify-macos-X.Y.zip convertify-update.json
+The disk image bundles unmodified builds of FFmpeg (GPL, because x264 is included), LAME (LGPL), Opus (BSD), x264 (GPL), FLAC (BSD and GPL) and vorbis-tools (GPL), obtained through Homebrew. They keep their own licences, their sources are available from their projects, and Convertify runs them as separate programs.
