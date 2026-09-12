@@ -112,7 +112,7 @@ final class UpdateService {
     private func promptForUpdate(_ c: Candidate, currentVersion: String, on window: NSWindow?) {
         let a = NSAlert()
         a.messageText = "Convertify \(c.version) is available"
-        let notes = c.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = Self.plainText(fromMarkdown: c.notes)
         a.informativeText = "You have \(currentVersion).\n\n" + (notes.isEmpty ? "" : String(notes.prefix(1200)) + "\n\n") + "Install downloads \(c.assetName), checks it, replaces the copy in Applications and relaunches. Nothing is left behind."
         a.addButton(withTitle: "Install"); a.addButton(withTitle: "Version History"); a.addButton(withTitle: "Later")
         present(a, on: window) { r in
@@ -235,6 +235,17 @@ final class UpdateService {
             if a != b { return a > b }
         }
         return false
+    }
+
+    /// Release notes are markdown; the sheet is plain text VoiceOver reads, so drop the markup.
+    static func plainText(fromMarkdown md: String) -> String {
+        var t = md.replacingOccurrences(of: "\r\n", with: "\n")
+        t = t.replacingOccurrences(of: #"\[([^\]]+)\]\([^)]+\)"#, with: "$1", options: .regularExpression)   // [text](url) -> text
+        t = t.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "__", with: "")
+        t = t.replacingOccurrences(of: #"(?m)^#+\s*"#, with: "", options: .regularExpression)                    // headings
+        t = t.replacingOccurrences(of: #"(?m)^\s*[-*]\s+"#, with: "• ", options: .regularExpression)             // bullets
+        t = t.replacingOccurrences(of: "`", with: "")
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func q(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }

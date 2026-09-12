@@ -126,9 +126,9 @@ enum FirstLaunch {
     }
     static func runAfterTidy(on window: NSWindow) {
         let showWelcome = {
-            guard !Prefs.welcomed else { return }
+            guard !Prefs.welcomed else { AppDelegate.shared.automaticUpdateCheckIfDue(); return }
             refreshServices()
-            welcome(on: window) { Prefs.welcomed = true }
+            welcome(on: window) { Prefs.welcomed = true; AppDelegate.shared.automaticUpdateCheckIfDue() }
         }
         if !Prefs.oldServicesChecked {
             offerToRemoveOldWorkflows(on: window) { Prefs.oldServicesChecked = true; showWelcome() }
