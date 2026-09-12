@@ -28,10 +28,13 @@ hdiutil create -volname Convertify -srcfolder "$STAGE" -ov -format UDZO Converti
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$PWD/$STAGE/Convertify.app" >/dev/null 2>&1 || true
 rm -rf "$STAGE"
 VERSION=$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")
+rm -f Convertify-macos-*.zip
+ditto -c -k --keepParent "$APP" "Convertify-macos-$VERSION.zip"     # the in-app updater downloads this one
+echo "zip for the updater: Convertify-macos-$VERSION.zip"
 SHA=$(shasum -a 256 Convertify.dmg | cut -d' ' -f1); SIZE=$(stat -f %z Convertify.dmg)
 cat > convertify-update.json <<J
 {"version": "$VERSION", "url": "${CONVERTIFY_DOWNLOAD_URL:-https://github.com/jakobrosin/convertify/releases/latest/download/Convertify.dmg}", "sha256": "$SHA", "size": $SIZE,
  "notes": ["See the manual in the Help menu for what is new."]}
 J
-echo "update manifest: convertify-update.json (set CONVERTIFY_DOWNLOAD_URL before running to fill in the real download address)"
+echo "update manifest: convertify-update.json (only still needed so Convertify 1.3 can find this release)"
 ls -la Convertify.dmg

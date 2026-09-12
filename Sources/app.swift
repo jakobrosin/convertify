@@ -3,7 +3,6 @@
 
 import AppKit
 import UserNotifications
-import CryptoKit
 
 // MARK: - Preferences
 
@@ -14,6 +13,7 @@ enum Prefs {
             "keepWindowOpen": false, "quitDelay": 6, "bringToFront": true,
             "notifyOnFinish": true, "soundOnFinish": true,
             "historyLimit": 50, "historyDays": 0, "confirmClear": true, "clearOnQuit": false,
+            "checkUpdatesAutomatically": true, "installUpdatesSilently": false,
         ])
     }
     static var keepWindowOpen: Bool { get { d.bool(forKey: "keepWindowOpen") } set { d.set(newValue, forKey: "keepWindowOpen") } }
@@ -25,6 +25,8 @@ enum Prefs {
     static var historyDays: Int { get { max(0, d.integer(forKey: "historyDays")) } set { d.set(newValue, forKey: "historyDays") } }
     static var confirmClear: Bool { get { d.bool(forKey: "confirmClear") } set { d.set(newValue, forKey: "confirmClear") } }
     static var clearOnQuit: Bool { get { d.bool(forKey: "clearOnQuit") } set { d.set(newValue, forKey: "clearOnQuit") } }
+    static var checkUpdatesAutomatically: Bool { get { d.bool(forKey: "checkUpdatesAutomatically") } set { d.set(newValue, forKey: "checkUpdatesAutomatically") } }
+    static var installUpdatesSilently: Bool { get { d.bool(forKey: "installUpdatesSilently") } set { d.set(newValue, forKey: "installUpdatesSilently") } }
     static var welcomed: Bool { get { d.bool(forKey: "welcomed") } set { d.set(newValue, forKey: "welcomed") } }
     static var oldServicesChecked: Bool { get { d.bool(forKey: "oldServicesChecked") } set { d.set(newValue, forKey: "oldServicesChecked") } }
 }
@@ -826,124 +828,7 @@ enum Maintenance {
     }
 
     static func installIntoApplicationsAndRelaunch() {
-        replaceInstalledApp(with: Bundle.main.bundleURL)
-    }
-
-    /// Replaces /Applications/Convertify.app with `source` and relaunches. Done by a detached shell so the running app can quit first.
-    static func replaceInstalledApp(with source: URL) {
-        let target = "/Applications/Convertify.app"
-        let script = """
-        sleep 1
-        rm -rf "\(target)"
-        ditto "\(source.path)" "\(target)"
-        xattr -dr com.apple.quarantine "\(target)" 2>/dev/null
-        case "\(source.path)" in "\(NSTemporaryDirectory())"*) rm -rf "\(source.path)";; esac
-        /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "\(target)"
-        /System/Library/CoreServices/pbs -flush; /System/Library/CoreServices/pbs -update
-        open "\(target)"
-        """
-        let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/zsh"); p.arguments = ["-c", script]
-        p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
-        try? p.run()
-        Log.write("installing \(source.path) into \(target) and relaunching")
-        NSApp.terminate(nil)
-    }
-
-    // MARK: Check for Updates
-    // Manifest: {"version":"1.4","url":"https://.../Convertify.dmg","sha256":"...","size":123,"notes":["..."]}
-    static let defaultManifestURL = "https://github.com/jakobrosin/convertify/releases/latest/download/convertify-update.json"
-    static var manifestURL: String { Prefs.d.string(forKey: "updateManifestURL") ?? defaultManifestURL }
-
-    static func checkForUpdates(on window: NSWindow, quiet: Bool = false) {
-        guard let url = URL(string: manifestURL), !manifestURL.isEmpty else {
-            if !quiet {
-                let a = NSAlert(); a.messageText = "No update location set"
-                a.informativeText = "Convertify does not know where to look for updates. The person who gave you Convertify can provide a manifest address; set it with:\ndefaults write com.jakobrosin.convertify updateManifestURL \"https://...\""
-                a.beginSheetModal(for: window) { _ in }
-            }
-            return
-        }
-        var req = URLRequest(url: url); req.cachePolicy = .reloadIgnoringLocalCacheData; req.timeoutInterval = 20
-        URLSession.shared.dataTask(with: req) { data, _, err in
-            DispatchQueue.main.async {
-                guard let data = data, let m = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let newVersion = m["version"] as? String, let dl = m["url"] as? String, let dlURL = URL(string: dl) else {
-                    if !quiet { let a = NSAlert(); a.messageText = "Could not check for updates"; a.informativeText = err?.localizedDescription ?? "The update manifest could not be read."; a.beginSheetModal(for: window) { _ in } }
-                    return
-                }
-                if !isNewer(newVersion, than: version) {
-                    if !quiet { let a = NSAlert(); a.messageText = "Convertify is up to date"; a.informativeText = "Version \(version) is the newest."; a.beginSheetModal(for: window) { _ in } }
-                    return
-                }
-                let notes = (m["notes"] as? [String] ?? []).map { "• " + $0 }.joined(separator: "\n")
-                let a = NSAlert()
-                a.messageText = "Convertify \(newVersion) is available"
-                a.informativeText = "You have \(version).\n\n" + (notes.isEmpty ? "" : notes + "\n\n") + "Download and Install replaces the copy in Applications and relaunches. Nothing is left behind."
-                a.addButton(withTitle: "Download and Install"); a.addButton(withTitle: "Later")
-                a.beginSheetModal(for: window) { r in
-                    guard r == .alertFirstButtonReturn else { return }
-                    downloadAndInstall(dlURL, sha256: m["sha256"] as? String, size: m["size"] as? Int, on: window)
-                }
-            }
-        }.resume()
-    }
-
-    static func isNewer(_ a: String, than b: String) -> Bool {
-        let x = a.split(separator: ".").map { Int($0) ?? 0 }, y = b.split(separator: ".").map { Int($0) ?? 0 }
-        for i in 0..<max(x.count, y.count) {
-            let p = i < x.count ? x[i] : 0, q = i < y.count ? y[i] : 0
-            if p != q { return p > q }
-        }
-        return false
-    }
-
-    static func downloadAndInstall(_ url: URL, sha256: String?, size: Int?, on window: NSWindow) {
-        Log.write("downloading update from \(url)")
-        URLSession.shared.downloadTask(with: url) { tmp, _, err in
-            // The temporary download is deleted when this handler returns, so keep it now.
-            let dmg = URL(fileURLWithPath: NSTemporaryDirectory() + "convertify-update-\(UUID().uuidString).dmg")
-            var kept = false
-            if let tmp = tmp, (try? FileManager.default.moveItem(at: tmp, to: dmg)) != nil { kept = true }
-            DispatchQueue.main.async {
-                guard kept else { fail("The download failed. \(err?.localizedDescription ?? "")", window); return }
-                if let size = size, let real = try? FileManager.default.attributesOfItem(atPath: dmg.path)[.size] as? Int, real != size {
-                    try? FileManager.default.removeItem(at: dmg); fail("The downloaded file has the wrong size, so it was discarded.", window); return
-                }
-                if let sha = sha256?.lowercased(), !sha.isEmpty {
-                    let got = sha256Hex(of: dmg)
-                    if got != sha {
-                        Log.write("checksum mismatch: expected \(sha) got \(got)")
-                        try? FileManager.default.removeItem(at: dmg); fail("The downloaded file failed its checksum, so it was discarded.", window); return
-                    }
-                }
-                let mount = NSTemporaryDirectory() + "convertify-update-mount-\(UUID().uuidString)"
-                let att = runTool("/usr/bin/hdiutil", ["attach", "-nobrowse", "-readonly", "-mountpoint", mount, dmg.path])
-                guard att.status == 0 else { try? FileManager.default.removeItem(at: dmg); fail("The disk image could not be opened.", window); return }
-                let newApp = URL(fileURLWithPath: mount + "/Convertify.app")
-                guard FileManager.default.fileExists(atPath: newApp.path) else {
-                    _ = runTool("/usr/bin/hdiutil", ["detach", mount, "-force"]); try? FileManager.default.removeItem(at: dmg)
-                    fail("The disk image does not contain Convertify.", window); return
-                }
-                // Copy out of the image first so it can be detached, then replace and relaunch.
-                let staged = URL(fileURLWithPath: NSTemporaryDirectory() + "convertify-update-\(UUID().uuidString).app")
-                let copy = runTool("/usr/bin/ditto", [newApp.path, staged.path])
-                _ = runTool("/usr/bin/hdiutil", ["detach", mount, "-force"])
-                try? FileManager.default.removeItem(at: dmg)
-                guard copy.status == 0 else { fail("The new version could not be copied.", window); return }
-                replaceInstalledApp(with: staged)
-            }
-        }.resume()
-    }
-    static func sha256Hex(of url: URL) -> String {
-        guard let h = try? FileHandle(forReadingFrom: url) else { return "" }
-        defer { try? h.close() }
-        var hasher = SHA256()
-        while let chunk = try? h.read(upToCount: 4 * 1024 * 1024), !chunk.isEmpty { hasher.update(data: chunk) }
-        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
-    }
-    static func fail(_ msg: String, _ window: NSWindow) {
-        Log.write("update failed: \(msg)")
-        let a = NSAlert(); a.messageText = "Update not installed"; a.informativeText = msg; a.beginSheetModal(for: window) { _ in }
+        UpdateService.shared.installAndRelaunch(stagedApp: Bundle.main.bundleURL, cleanup: nil)
     }
 }
 
@@ -955,6 +840,8 @@ final class PreferencesWindowController: NSWindowController {
     let bringFront = NSButton(checkboxWithTitle: "Bring the window to the front when a job starts", target: nil, action: nil)
     let notify = NSButton(checkboxWithTitle: "Show a notification when a job finishes", target: nil, action: nil)
     let sound = NSButton(checkboxWithTitle: "Play a sound when a job finishes", target: nil, action: nil)
+    let autoCheck = NSButton(checkboxWithTitle: "Check for updates once a day when Convertify starts", target: nil, action: nil)
+    let silentInstall = NSButton(checkboxWithTitle: "Install updates without asking", target: nil, action: nil)
     let limit = NSPopUpButton(frame: .zero, pullsDown: false)
     let days = NSPopUpButton(frame: .zero, pullsDown: false)
     let confirm = NSButton(checkboxWithTitle: "Ask before clearing the history", target: nil, action: nil)
@@ -979,7 +866,7 @@ final class PreferencesWindowController: NSWindowController {
         popup(quitDelay, Self.delayChoices, label: "Quit this long after a successful job")
         popup(limit, Self.limitChoices, label: "Keep at most this many finished files")
         popup(days, Self.daysChoices, label: "Drop finished files from the history")
-        for b in [keepOpen, bringFront, notify, sound, confirm, clearQuit] { b.target = self; b.action = #selector(changed) }
+        for b in [keepOpen, bringFront, notify, sound, confirm, clearQuit, autoCheck, silentInstall] { b.target = self; b.action = #selector(changed) }
 
         func labeled(_ text: String, _ control: NSView) -> NSView {
             let l = NSTextField(labelWithString: text)
@@ -992,7 +879,7 @@ final class PreferencesWindowController: NSWindowController {
             let item = NSTabViewItem(identifier: title); item.label = title; item.view = stack
             tabs.addTabViewItem(item)
         }
-        page("General", [keepOpen, labeled("After a successful job, quit after:", quitDelay), bringFront, notify, sound])
+        page("General", [keepOpen, labeled("After a successful job, quit after:", quitDelay), bringFront, notify, sound, autoCheck, silentInstall])
         page("History", [labeled("Keep at most:", limit), labeled("Drop old entries:", days), confirm, clearQuit])
         tabs.setAccessibilityLabel("Preference sections")
         let root = NSStackView(views: [tabs]); root.orientation = .vertical; root.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
@@ -1016,6 +903,8 @@ final class PreferencesWindowController: NSWindowController {
         select(days, Self.daysChoices, value: Prefs.historyDays)
         confirm.state = Prefs.confirmClear ? .on : .off
         clearQuit.state = Prefs.clearOnQuit ? .on : .off
+        autoCheck.state = Prefs.checkUpdatesAutomatically ? .on : .off
+        silentInstall.state = Prefs.installUpdatesSilently ? .on : .off
     }
     @objc func changed() { save() }
     func save() {
@@ -1028,6 +917,8 @@ final class PreferencesWindowController: NSWindowController {
         Prefs.historyDays = Self.daysChoices[max(0, days.indexOfSelectedItem)].1
         Prefs.confirmClear = confirm.state == .on
         Prefs.clearOnQuit = clearQuit.state == .on
+        Prefs.checkUpdatesAutomatically = autoCheck.state == .on
+        Prefs.installUpdatesSilently = silentInstall.state == .on
         Engine.shared.pruneNow()
     }
     override func showWindow(_ sender: Any?) { load(); super.showWindow(sender); window?.makeKeyAndOrderFront(nil) }
@@ -1176,6 +1067,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         menu("Convertify") { m in
             item(m, "About Convertify", #selector(showAbout(_:)))
             item(m, "Check for Updates…", #selector(checkForUpdates(_:)))
+            item(m, "Version History…", #selector(versionHistory(_:)))
             m.addItem(.separator())
             item(m, "Preferences…", #selector(showPreferences(_:)), ",")
             m.addItem(.separator())
@@ -1335,9 +1227,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
     @objc func showAbout(_ sender: Any?) {
         let ff = findTool("ffmpeg") ?? "not found"
-        let credits = NSAttributedString(string: "Converts audio and video from the Finder Services menu.\n\nDescended from the Windows SendTo encoders by Andre Louis (github.com/OnjLouis) and arfy.\nSource and updates: github.com/jakobrosin/convertify\nMIT licence for Convertify; bundled tools keep their own licences, see the manual.\n\nffmpeg: \(ff)\noggenc: \(findTool("oggenc") ?? "not found")\nflac: \(findTool("flac") ?? "not found")\n\nLog: \(Log.url.path)\nHistory: \(History.url.path)")
+        let credits = NSAttributedString(string: "Converts audio and video from the Finder Services menu.\n\nDescended from the Windows SendTo encoders by Andre Louis (github.com/OnjLouis) and arfy.\nSource and updates: github.com/jakobrosin/convertify\nUpdater based on Clipman by Andre Louis.\nMIT licence for Convertify; bundled tools keep their own licences, see the manual.\n\nffmpeg: \(ff)\noggenc: \(findTool("oggenc") ?? "not found")\nflac: \(findTool("flac") ?? "not found")\n\nLog: \(Log.url.path)\nHistory: \(History.url.path)")
         NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits, .applicationName: "Convertify", .applicationVersion: "1.3"])
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits, .applicationName: "Convertify", .applicationVersion: "1.4"])
     }
     @objc func showHelp(_ sender: Any?) {
         let a = NSAlert()
@@ -1468,6 +1360,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
     @objc func checkForUpdates(_ sender: Any?) {
         showWindow(nil)
-        if let w = windowController.window { Maintenance.checkForUpdates(on: w) }
+        UpdateService.shared.check(currentVersion: Maintenance.version, manual: true, installSilently: false, on: windowController.window)
+    }
+    @objc func versionHistory(_ sender: Any?) { UpdateService.shared.openVersionHistory() }
+    /// Once a day at launch, when enabled. Never interrupts a running job.
+    func automaticUpdateCheckIfDue() {
+        guard Prefs.checkUpdatesAutomatically, !Engine.shared.isBusy else { return }
+        let last = Prefs.d.double(forKey: "lastUpdateCheck")
+        guard Date().timeIntervalSince1970 - last > 20 * 3600 else { return }
+        UpdateService.shared.check(currentVersion: Maintenance.version, manual: false, installSilently: Prefs.installUpdatesSilently, on: windowController.window)
     }
 }

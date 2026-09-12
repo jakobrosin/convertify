@@ -7,7 +7,7 @@ BUILD="build"
 rm -rf "$BUILD"; mkdir -p "$BUILD/Convertify.app/Contents/MacOS" "$BUILD/Convertify.app/Contents/Resources"
 
 echo "compiling..."
-swiftc -O -swift-version 5 -target arm64-apple-macos14 -o "$BUILD/Convertify.app/Contents/MacOS/Convertify" Sources/main.swift Sources/app.swift 2>&1 | grep -v '^$' || true
+swiftc -O -swift-version 5 -target arm64-apple-macos14 -o "$BUILD/Convertify.app/Contents/MacOS/Convertify" Sources/main.swift Sources/app.swift Sources/UpdateService.swift 2>&1 | grep -v '^$' || true
 [[ -x "$BUILD/Convertify.app/Contents/MacOS/Convertify" ]] || { echo "compile failed"; exit 1; }
 
 # One service entry per preset. Keep in sync with Preset.all in main.swift.
@@ -37,8 +37,8 @@ cat <<P
   <key>CFBundleName</key><string>Convertify</string>
   <key>CFBundleDisplayName</key><string>Convertify</string>
   <key>CFBundleIdentifier</key><string>com.jakobrosin.convertify</string>
-  <key>CFBundleVersion</key><string>1.3</string>
-  <key>CFBundleShortVersionString</key><string>1.3</string>
+  <key>CFBundleVersion</key><string>1.4</string>
+  <key>CFBundleShortVersionString</key><string>1.4</string>
   <key>CFBundleExecutable</key><string>Convertify</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>

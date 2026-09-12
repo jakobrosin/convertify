@@ -7,6 +7,7 @@ Convertify is the Mac descendant of **SendTo encoders**, the Windows project by
 [Andre Louis](https://github.com/OnjLouis) (Onj) and arfy, started in 2012 and still maintained by Andre.
 The conversion names, quality settings and several 2026 features (remux before re-encoding, lossless
 audio extraction, MKV and image conversions, media reports, the output naming scheme) come from there.
+The in-app updater is based on the one in Andre's [Clipman](https://github.com/OnjLouis/Clipman) (MIT).
 The Mac version was written by Jakob Rosin in 2026 together with Claude (Anthropic).
 
 Download: the latest `Convertify.dmg` under [Releases](https://github.com/jakobrosin/convertify/releases).
@@ -137,3 +138,14 @@ Cmd A selects all rows; Delete removes all selected finished rows.
   the matching download URL. A release is: bump the version in build.sh, app.swift (About) and the manual,
   `./build.sh && ./make_dmg.sh`, then `gh release create vX.Y Convertify.dmg convertify-update.json`.
   A user can point the app elsewhere with `defaults write com.jakobrosin.convertify updateManifestURL ...`.
+
+## 1.4
+
+Updater rewritten after Clipman's UpdateService (Andre Louis, MIT): discovers releases through the GitHub
+Releases API (newest non-draft, non-prerelease with a Convertify zip or dmg asset), verifies the asset with
+the SHA-256 digest GitHub publishes, unpacks, runs codesign --verify and checks the bundle identifier, then a
+zsh script waits for the app to quit, replaces /Applications/Convertify.app, re-registers services, relaunches
+and removes the staging folder. Daily automatic check at launch (pref) and silent install (pref). Version
+History menu item. make_dmg.sh also produces Convertify-macos-<version>.zip; upload dmg + zip (+ the manifest
+once more, for 1.3 users) to each release:
+gh release create vX.Y Convertify.dmg Convertify-macos-X.Y.zip convertify-update.json

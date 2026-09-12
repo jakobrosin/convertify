@@ -42,7 +42,7 @@
 
 <h2 id="origins">Origins and credits</h2>
 
-<p>Convertify is the Mac descendant of <strong>SendTo encoders</strong>, a Windows project started by <strong>Andre Louis</strong> (<a href="https://github.com/OnjLouis">github.com/OnjLouis</a>, known as Onj) and further developed by <strong>arfy</strong> from 2012 on, and still maintained by Andre in 2026. Their idea was simple and good: put encoders such as LAME, FLAC, oggenc and Opus in the Windows "Send To" menu, so a blind user could convert a file with a couple of keystrokes and no fiddling with command lines. That project is the reason this one exists, and the conversions here follow the same names and the same quality settings wherever that made sense. Several ideas in this version, such as copying video streams without re-encoding, extracting audio losslessly, the MKV and image conversions, the media report and the output naming scheme, were adopted from Andre's September 2026 release.</p>
+<p>Convertify is the Mac descendant of <strong>SendTo encoders</strong>, a Windows project started by <strong>Andre Louis</strong> (<a href="https://github.com/OnjLouis">github.com/OnjLouis</a>, known as Onj) and further developed by <strong>arfy</strong> from 2012 on, and still maintained by Andre in 2026. Their idea was simple and good: put encoders such as LAME, FLAC, oggenc and Opus in the Windows "Send To" menu, so a blind user could convert a file with a couple of keystrokes and no fiddling with command lines. That project is the reason this one exists, and the conversions here follow the same names and the same quality settings wherever that made sense. Several ideas in this version, such as copying video streams without re-encoding, extracting audio losslessly, the MKV and image conversions, the media report and the output naming scheme, were adopted from Andre's September 2026 release, and the update mechanism is based on his Clipman app.</p>
 
 <p>The Mac version was made by Jakob Rosin in 2026, first as a set of scripts and later as this app, written together with Claude, an AI assistant from Anthropic. The source code and new versions live at <a href="https://github.com/jakobrosin/convertify">github.com/jakobrosin/convertify</a>.</p>
 
@@ -186,7 +186,7 @@
 <h3>Convertify menu</h3>
 <ul>
 <li>About Convertify. Shows the version and where the tools, the log and the history live.</li>
-<li>Check for Updates. See the section on updating below.</li>
+<li>Check for Updates and Version History. See the section on updating below.</li>
 <li>Preferences, <kbd>Command</kbd> <kbd>Comma</kbd>.</li>
 <li>Quit, <kbd>Command</kbd> <kbd>Q</kbd>. If a conversion is running you are asked first.</li>
 </ul>
@@ -241,6 +241,8 @@
 <li><strong>Bring the window to the front when a job starts.</strong> On by default. Turn it off if you prefer the window to appear without taking your keyboard focus; you can still reach it with <kbd>Command</kbd> <kbd>Tab</kbd>.</li>
 <li><strong>Show a notification when a job finishes.</strong></li>
 <li><strong>Play a sound when a job finishes.</strong> Glass for success, Sosumi for failure.</li>
+<li><strong>Check for updates once a day when Convertify starts.</strong> On by default.</li>
+<li><strong>Install updates without asking.</strong> Off by default.</li>
 </ul>
 
 <h3>History</h3>
@@ -293,7 +295,7 @@
 
 <h2 id="privacy">Privacy</h2>
 
-<p>Convertify connects to the internet only when you choose Check for Updates, and then only to fetch the update file and, if you agree, the new version. It sends nothing anywhere and collects nothing. The only things it writes are the converted files next to your originals, a log file and a history file in your own Library folder, and its preferences.</p>
+<p>Convertify connects to the internet only to check for updates, once a day at launch if that is enabled and when you ask, and then only to GitHub, to read the release list and, if you agree, download the new version. It sends nothing anywhere and collects nothing. The only things it writes are the converted files next to your originals, a log file and a history file in your own Library folder, and its preferences.</p>
 
 <h2 id="disclaimer">Disclaimers and licences</h2>
 
@@ -321,7 +323,7 @@
 <h3>Thanks</h3>
 <p>To Andre Louis and arfy for starting it all and for keeping SendTo encoders alive for more than a decade, and to the FFmpeg, LAME, Opus, x264 and Xiph.Org developers whose work does the real job.</p>
 
-<p><em>Convertify 1.3, September 2026.</em></p>
+<p><em>Convertify 1.4, September 2026.</em></p>
 
 </body>
 </html>
