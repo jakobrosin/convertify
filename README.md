@@ -98,3 +98,22 @@ accessibility announcement of the current status (Speak Status). Cmd D opens a S
 for the selected row with full paths, times and message, plus a Copy button. Escape in the table
 hides the window without quitting. The Convert menu is grouped: lossy, WAV, video, "and Delete".
 Cmd A selects all rows; Delete removes all selected finished rows.
+
+## 1.3 (adopted from Andre Louis's SendTo encoders, September 2026 release)
+
+- Output naming now matches SendTo: name.ext, name-converted.ext, name-converted-2.ext...
+- File to MP4/MOV copies the video stream when the container can hold it (codec whitelist), re-encodes only
+  incompatible audio to AAC; otherwise h264_videotoolbox, then libx264.
+- New: File to MKV (lossless remux, fallback without data streams), Extract Audio (codec-aware extension,
+  -c:a copy, verified), Image to JPEG / PNG (sips; WebP not possible: no encoder available), Media Info
+  (ffprobe JSON rendered as speech-friendly text; service + Cmd Shift I + Convert menu).
+- Chapters mapped on all ffmpeg presets; every output verified with ffprobe; flac uses -j threads.
+- Maintenance on launch: on version change re-register with LaunchServices, refresh pbs, delete stale temp
+  files; offer to trash duplicate copies (found via LaunchServices); offer to install into /Applications when
+  run from a DMG or Downloads.
+- Check for Updates: reads a JSON manifest (defaults key updateManifestURL, see make_dmg.sh which writes
+  convertify-update.json with version/url/sha256/size/notes), verifies size + SHA-256 (CryptoKit), mounts
+  the DMG, stages the app, replaces /Applications/Convertify.app via a detached shell and relaunches.
+  Host Convertify.dmg and convertify-update.json somewhere and set CONVERTIFY_DOWNLOAD_URL when running
+  make_dmg.sh; users set the manifest address with:
+  defaults write com.jakobrosin.convertify updateManifestURL "https://.../convertify-update.json"

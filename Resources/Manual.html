@@ -34,6 +34,7 @@
 <li><a href="#notify">Notifications and sounds</a></li>
 <li><a href="#history">The history</a></li>
 <li><a href="#trouble">If something does not work</a></li>
+<li><a href="#updates">Updating Convertify</a></li>
 <li><a href="#privacy">Privacy</a></li>
 <li><a href="#disclaimer">Disclaimers and licences</a></li>
 </ul>
@@ -41,7 +42,7 @@
 
 <h2 id="origins">Origins and credits</h2>
 
-<p>Convertify is the Mac descendant of <strong>SendTo encoders</strong>, a Windows project started by <strong>Andre Louis</strong> (known as Onj) and further developed by <strong>arfy</strong> between 2012 and 2013. Their idea was simple and good: put encoders such as LAME, FLAC, oggenc and Opus in the Windows "Send To" menu, so a blind user could convert a file with a couple of keystrokes and no fiddling with command lines. That project is the reason this one exists, and the conversions here follow the same names and the same quality settings wherever that made sense. Their original readme is included with the app as "Original Windows SendTo readme.txt".</p>
+<p>Convertify is the Mac descendant of <strong>SendTo encoders</strong>, a Windows project started by <strong>Andre Louis</strong> (known as Onj) and further developed by <strong>arfy</strong> from 2012 on, and still maintained by Andre in 2026. Their idea was simple and good: put encoders such as LAME, FLAC, oggenc and Opus in the Windows "Send To" menu, so a blind user could convert a file with a couple of keystrokes and no fiddling with command lines. That project is the reason this one exists, and the conversions here follow the same names and the same quality settings wherever that made sense. Their original readme is included with the app as "Original Windows SendTo readme.txt". Several ideas in this version, such as copying video streams without re-encoding, extracting audio losslessly, the MKV and image conversions, the media report and the output naming scheme, were adopted from Andre's September 2026 release.</p>
 
 <p>The Mac version was made by Jakob Rosin in 2026, first as a set of scripts and later as this app, written together with Claude, an AI assistant from Anthropic.</p>
 
@@ -125,10 +126,22 @@
 <p>Compresses a WAV or AIFF to FLAC at the highest compression level, verifies the result by decoding it again, and then <strong>deletes the WAV file</strong>. 32-bit float files, which FLAC cannot store, are converted to 24-bit first. The original is only deleted after the verification passed.</p>
 
 <h3>File to MP4</h3>
-<p>Re-encodes a video to H.264 in an MP4 container at a high quality setting (CRF 18). The audio is copied unchanged if MP4 can hold it, otherwise it becomes AAC at 192 kbit/s. Only offered for video files.</p>
+<p>Puts a video into an MP4 container. If the video stream is something MP4 can hold, such as H.264 or HEVC, it is copied as it is, which takes seconds and loses nothing; only audio that MP4 cannot hold, such as uncompressed PCM, is re-encoded to AAC at 192 kbit/s. If the video itself has to be re-encoded, Convertify uses the Mac's hardware H.264 encoder first and the software x264 encoder as a fallback. Only offered for video files.</p>
 
 <h3>File to MOV</h3>
-<p>The same as File to MP4, but in a QuickTime MOV container, which can also hold uncompressed audio unchanged.</p>
+<p>The same as File to MP4, but for a QuickTime MOV container, which can also hold ProRes video and uncompressed audio unchanged.</p>
+
+<h3>File to MKV</h3>
+<p>Repackages a media file into a Matroska container without re-encoding anything. All streams, chapters and metadata that Matroska supports are kept. Useful for files whose original container is awkward, or for keeping several audio tracks and subtitles together.</p>
+
+<h3>Extract Audio</h3>
+<p>Takes the first audio stream out of a video or audio file without re-encoding it, and gives the result the right extension for what it is: m4a for AAC or Apple Lossless, mp3, opus, ogg for Vorbis, flac, wav for uncompressed audio, and mka as a fallback for unusual codecs. Metadata and chapters are kept where the container allows. This is the way to get the sound out of a video with no quality loss.</p>
+
+<h3>Image to JPEG and Image to PNG</h3>
+<p>Convert pictures with the image tools built into macOS. JPEG output uses quality 90. Photo metadata that the destination format can hold is kept. HEIC photos from an iPhone can be converted this way. Only offered for image files.</p>
+
+<h3>Media Info</h3>
+<p>Not a conversion but a report: container, duration, size, bitrate, each video and audio stream with its codec, resolution or sample rate, channels and bit depth, then the tags and the number of chapters. It opens in its own window as plain text that VoiceOver reads line by line and that you can select and copy. Also available for the selected row in the Files table with <kbd>Command</kbd> <kbd>Shift</kbd> <kbd>I</kbd>, showing both the source and the output.</p>
 
 <h3>Image + Audio to Video</h3>
 <p>Select exactly one picture and one audio file. The result is an MP4 video showing the picture for the whole length of the audio, the way people upload audio to video sites. The picture is fitted into 1280 by 720 pixels without stretching. The audio is copied if it is already AAC or MP3, otherwise it becomes AAC.</p>
@@ -137,8 +150,9 @@
 
 <ul>
 <li>The output goes next to the input, with the same name and the new extension. "Song.flac" becomes "Song.mp3".</li>
-<li><strong>Convertify never overwrites a file.</strong> If "Song.mp3" already exists, the new file is called "Song 2.mp3", then "Song 3.mp3", and so on.</li>
-<li>Converting a file to its own format, such as an MP3 to MP3, gives "Song converted.mp3".</li>
+<li><strong>Convertify never overwrites a file.</strong> If "Song.mp3" already exists, the new file is called "Song-converted.mp3", then "Song-converted-2.mp3", "Song-converted-3.mp3" and so on. This is the same scheme the Windows SendTo encoders use.</li>
+<li>Converting a file to its own format, such as an MP3 to MP3, also gives "Song-converted.mp3".</li>
+<li>Every result is read back with ffprobe before it counts as done. A file that cannot be read back is deleted and reported as failed, so a broken output never sits next to a good original.</li>
 <li>Only the two conversions with "and Delete" in their name remove anything, and only their own input file.</li>
 </ul>
 
@@ -172,6 +186,7 @@
 <h3>Convertify menu</h3>
 <ul>
 <li>About Convertify. Shows the version and where the tools, the log and the history live.</li>
+<li>Check for Updates. See the section on updating below.</li>
 <li>Preferences, <kbd>Command</kbd> <kbd>Comma</kbd>.</li>
 <li>Quit, <kbd>Command</kbd> <kbd>Q</kbd>. If a conversion is running you are asked first.</li>
 </ul>
@@ -196,7 +211,7 @@
 </ul>
 
 <h3>Convert menu</h3>
-<p>One item per conversion, grouped: lossy formats first, then WAV, then the video conversions, and the two "and Delete" conversions last. Each opens a file chooser.</p>
+<p>One item per conversion, grouped: lossy formats, then WAV and Extract Audio, then the video conversions, then the image conversions, and the two "and Delete" conversions last. Media Info is at the bottom. Each opens a file chooser.</p>
 
 <h3>Job menu</h3>
 <ul>
@@ -270,9 +285,15 @@
 <h3>Convertify quit while a conversion was running</h3>
 <p>Check that "keep the window open" behaves as you expect and that you did not press <kbd>Command</kbd> <kbd>Q</kbd>. A cancelled or interrupted conversion always deletes its partial output, so there are no half files left behind.</p>
 
+<h2 id="updates">Updating Convertify</h2>
+
+<p>When a newer Convertify is installed over an older one, whether by dragging a new copy into Applications or through Check for Updates, the app tidies up after itself on the next launch: it re-registers its Finder services, removes its old temporary files, and looks for stray copies of itself. If a second copy is found in Downloads or elsewhere, it offers to move that copy to the Trash, because macOS may otherwise register the Finder services from the wrong one. If you happen to run Convertify straight from the disk image or from Downloads, it offers to install itself into Applications and relaunch from there.</p>
+
+<p><strong>Check for Updates</strong>, in the Convertify menu, asks a small update file on the web whether a newer version exists. If so, it shows what is new and offers Download and Install. The download is checked against its published size and checksum before anything is touched, then the copy in Applications is replaced in place and Convertify relaunches. Nothing else is written anywhere. The person who gave you Convertify can tell you the address of the update file; without one, Check for Updates simply says so.</p>
+
 <h2 id="privacy">Privacy</h2>
 
-<p>Convertify never connects to the internet, sends nothing anywhere, and collects nothing. The only things it writes are the converted files next to your originals, a log file and a history file in your own Library folder, and its preferences.</p>
+<p>Convertify connects to the internet only when you choose Check for Updates, and then only to fetch the update file and, if you agree, the new version. It sends nothing anywhere and collects nothing. The only things it writes are the converted files next to your originals, a log file and a history file in your own Library folder, and its preferences.</p>
 
 <h2 id="disclaimer">Disclaimers and licences</h2>
 
@@ -297,7 +318,7 @@
 <h3>Thanks</h3>
 <p>To Andre Louis and arfy for starting it all, and to the FFmpeg and Xiph.Org developers whose work does the real job.</p>
 
-<p><em>Convertify 1.2, September 2026.</em></p>
+<p><em>Convertify 1.3, September 2026.</em></p>
 
 </body>
 </html>

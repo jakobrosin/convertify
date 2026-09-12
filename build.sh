@@ -37,8 +37,8 @@ cat <<P
   <key>CFBundleName</key><string>Convertify</string>
   <key>CFBundleDisplayName</key><string>Convertify</string>
   <key>CFBundleIdentifier</key><string>com.jakobrosin.convertify</string>
-  <key>CFBundleVersion</key><string>1.2</string>
-  <key>CFBundleShortVersionString</key><string>1.2</string>
+  <key>CFBundleVersion</key><string>1.3</string>
+  <key>CFBundleShortVersionString</key><string>1.3</string>
   <key>CFBundleExecutable</key><string>Convertify</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
@@ -68,6 +68,11 @@ svc wav2flac "Wav to Flac and Delete" public.audio
 svc mp4 "File to MP4" public.movie
 svc mov "File to MOV" public.movie
 svc imagevideo "Image + Audio to Video" public.audio public.image
+svc mkv "File to MKV" public.movie public.audio
+svc extractaudio "Extract Audio" public.movie public.audio
+svc jpeg "Image to JPEG" public.image
+svc png "Image to PNG" public.image
+svc mediainfo "Media Info" public.audio public.movie public.image
 cat <<P
   </array>
 </dict>

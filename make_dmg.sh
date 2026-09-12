@@ -27,4 +27,11 @@ rm -f Convertify.dmg
 hdiutil create -volname Convertify -srcfolder "$STAGE" -ov -format UDZO Convertify.dmg >/dev/null
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$PWD/$STAGE/Convertify.app" >/dev/null 2>&1 || true
 rm -rf "$STAGE"
+VERSION=$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")
+SHA=$(shasum -a 256 Convertify.dmg | cut -d' ' -f1); SIZE=$(stat -f %z Convertify.dmg)
+cat > convertify-update.json <<J
+{"version": "$VERSION", "url": "${CONVERTIFY_DOWNLOAD_URL:-https://example.com/Convertify.dmg}", "sha256": "$SHA", "size": $SIZE,
+ "notes": ["See the manual in the Help menu for what is new."]}
+J
+echo "update manifest: convertify-update.json (set CONVERTIFY_DOWNLOAD_URL before running to fill in the real download address)"
 ls -la Convertify.dmg

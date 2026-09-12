@@ -3,6 +3,7 @@
 
 import AppKit
 import UserNotifications
+import CryptoKit
 
 // MARK: - Preferences
 
@@ -118,6 +119,10 @@ enum FirstLaunch {
     }
 
     static func runIfNeeded(on window: NSWindow) {
+        Maintenance.afterUpgradeIfNeeded()
+        Maintenance.tidyCopies(on: window) { runAfterTidy(on: window) }
+    }
+    static func runAfterTidy(on window: NSWindow) {
         let showWelcome = {
             guard !Prefs.welcomed else { return }
             refreshServices()
@@ -331,7 +336,13 @@ final class Engine {
             if isDir.boolValue { finish(e, .skipped, message: "is a folder"); Log.write("skip folder: \(file.path)"); continue }
             if !FileManager.default.isReadableFile(atPath: file.path) { finish(e, .failed, message: "cannot read the file"); Log.write("cannot read: \(file.path)"); continue }
 
-            let out = outputPath(for: file, ext: job.preset.ext)
+            var ext = job.preset.ext
+            if job.preset.kind == .extractAudio {
+                let codec = audioCodec(file)
+                if codec.isEmpty { finish(e, .failed, message: "no audio stream in file"); Log.write("FAIL: \(file.path) no audio"); continue }
+                ext = extractExtension(forCodec: codec)
+            }
+            let out = outputPath(for: file, ext: ext)
             let progress = NSTemporaryDirectory() + "convertify-progress-\(ProcessInfo.processInfo.processIdentifier).txt"
             try? FileManager.default.removeItem(atPath: progress)
             job.skipCurrent = false
@@ -339,7 +350,7 @@ final class Engine {
             let result = convert(job, file, out, progress)
             switch result {
             case .success:
-                if let size = try? FileManager.default.attributesOfItem(atPath: out.path)[.size] as? Int, size > 0 {
+                if outputLooksValid(out) {
                     Log.write("ok:   \(file.path) -> \(out.path)")
                     if job.preset.kind == .flacDecodeDelete || job.preset.kind == .flacEncodeDelete {
                         try? FileManager.default.removeItem(at: file)
@@ -347,8 +358,8 @@ final class Engine {
                     finish(e, .done, output: out)
                 } else {
                     try? FileManager.default.removeItem(at: out)
-                    Log.write("FAIL: \(file.path) empty output")
-                    finish(e, .failed, message: "empty output")
+                    Log.write("FAIL: \(file.path) output failed verification")
+                    finish(e, .failed, message: "the result could not be read back, so it was deleted")
                 }
             case .failure(let msg):
                 try? FileManager.default.removeItem(at: out)
@@ -369,34 +380,73 @@ final class Engine {
             args += inputArgs + ["-i", input.path] + middle + [out.path]
             return exec(ff, args)
         }
+        let threads = ["-j", String(max(1, min(8, ProcessInfo.processInfo.activeProcessorCount)))]
         switch job.preset.kind {
         case .ffmpeg:
             return ffmpeg(job.preset.ffmpegArgs(input))
         case .videoMP4, .videoMOV:
             guard hasVideo(input) else { return .failure("no video stream in file") }
-            let codec = audioCodec(input)
-            let container = job.preset.kind == .videoMP4 ? "mp4" : "mov"
-            var audio: [String]
-            if codec.isEmpty { audio = ["-an"] }
-            else {
-                let copyOK: Bool
-                if container == "mp4" { copyOK = ["aac", "mp3", "ac3", "eac3", "alac", "opus"].contains(codec) }
-                else { copyOK = ["aac", "mp3", "ac3", "alac"].contains(codec) || codec.hasPrefix("pcm_") }
-                audio = ["-map", "0:a:0", "-c:a"] + (copyOK ? ["copy"] : ["aac_at", "-b:a", "192k"])
+            let isMP4 = job.preset.kind == .videoMP4
+            let vcodec = ffprobe(input, entries: "stream=codec_name").components(separatedBy: "\n").first ?? ""   // first stream; refine below
+            let vcodecReal = runTool(findTool("ffprobe")!, ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", input.path]).out.trimmingCharacters(in: .whitespacesAndNewlines)
+            _ = vcodec
+            let acodec = audioCodec(input)
+            let videoOK = isMP4 ? ["h264", "hevc", "mpeg4", "av1", "vp9"].contains(vcodecReal)
+                                : ["h264", "hevc", "mpeg4", "prores", "mjpeg", "dnxhd", "av1"].contains(vcodecReal)
+            let audioOK = acodec.isEmpty || (isMP4 ? ["aac", "mp3", "ac3", "eac3", "alac", "opus"].contains(acodec)
+                                                   : ["aac", "mp3", "ac3", "alac"].contains(acodec) || acodec.hasPrefix("pcm_"))
+            let audioArgs: [String] = acodec.isEmpty ? ["-an"] : (audioOK ? ["-map", "0:a?", "-c:a", "copy"] : ["-map", "0:a?", "-c:a", "aac_at", "-b:a", "192k"])
+            let common = ["-sn", "-dn", "-map_metadata", "0", "-map_chapters", "0", "-movflags", "+faststart"]
+            if videoOK {
+                // 1. Keep the video as it is; copy or re-encode only the audio. Seconds, and the picture is untouched.
+                let r = ffmpeg(["-map", "0:v:0", "-c:v", "copy"] + audioArgs + common)
+                if case .success = r, outputLooksValid(out) { return .success(()) }
+                try? FileManager.default.removeItem(at: out)
             }
-            return ffmpeg(["-map", "0:v:0"] + audio + ["-map_metadata", "0", "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p", "-movflags", "+faststart"])
+            let encAudio: [String] = acodec.isEmpty ? ["-an"] : ["-map", "0:a?", "-c:a", "aac_at", "-b:a", "192k"]
+            // 2. Apple's hardware H.264 encoder.
+            let hw = ffmpeg(["-map", "0:v:0", "-c:v", "h264_videotoolbox", "-q:v", "65", "-pix_fmt", "yuv420p"] + encAudio + common)
+            if case .success = hw, outputLooksValid(out) { return .success(()) }
+            try? FileManager.default.removeItem(at: out)
+            // 3. Software x264.
+            return ffmpeg(["-map", "0:v:0", "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p"] + encAudio + common)
+        case .remuxMKV:
+            let full = ffmpeg(["-map", "0", "-map_metadata", "0", "-map_chapters", "0", "-c", "copy"])
+            if case .success = full, outputLooksValid(out) { return .success(()) }
+            try? FileManager.default.removeItem(at: out)
+            // Retry without container-specific data streams; keep video, audio, subtitles and attachments.
+            return ffmpeg(["-map", "0:v?", "-map", "0:a?", "-map", "0:s?", "-map", "0:t?", "-map_metadata", "0", "-map_chapters", "0", "-c", "copy"])
+        case .extractAudio:
+            let codec = audioCodec(input)
+            var args = ["-map", "0:a:0"]
+            if !rawAudioCodecs.contains(codec) { args += ["-map_metadata", "0", "-map_chapters", "0"] }
+            args += ["-vn", "-sn", "-dn", "-c:a", "copy"]
+            let r = ffmpeg(args)
+            if case .failure = r { return r }
+            guard audioCodec(out) == codec else { return .failure("the extracted file did not contain the expected \(codec) audio") }
+            return .success(())
+        case .imageJPEG, .imagePNG:
+            // sips is part of macOS and keeps the photo metadata the destination can hold.
+            let fmt = job.preset.kind == .imageJPEG ? "jpeg" : "png"
+            var args = ["-s", "format", fmt]
+            if fmt == "jpeg" { args += ["-s", "formatOptions", "90"] }
+            args += [input.path, "--out", out.path]
+            let r = exec("/usr/bin/sips", args)
+            if case .failure = r { return r }
+            guard let size = try? FileManager.default.attributesOfItem(atPath: out.path)[.size] as? Int, size > 0 else { return .failure("no image was written") }
+            return .success(())
         case .oggPipe:
             return oggPipe(input, out, progress)
         case .flacDecodeDelete:
-            return exec(findTool("flac")!, ["-d", "-f", "-s", "--keep-foreign-metadata-if-present", "-o", out.path, input.path])
+            return exec(findTool("flac")!, ["-d", "-f", "-s"] + threads + ["--keep-foreign-metadata-if-present", "-o", out.path, input.path])
         case .flacEncodeDelete:
             let flac = findTool("flac")!
-            if case .success = exec(flac, ["-8", "-V", "-f", "-s", "--keep-foreign-metadata-if-present", "-o", out.path, input.path]) { return .success(()) }
+            if case .success = exec(flac, ["-8", "-V", "-f", "-s"] + threads + ["--keep-foreign-metadata-if-present", "-o", out.path, input.path]) { return .success(()) }
             let tmp = NSTemporaryDirectory() + "convertify-pcm24-\(UUID().uuidString).wav"
             defer { try? FileManager.default.removeItem(atPath: tmp) }
             let r = exec(ff, ["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-nostats", "-progress", progress, "-i", input.path, "-map", "0:a:0", "-c:a", "pcm_s24le", tmp])
             if case .failure(let m) = r { return .failure(m) }
-            return exec(flac, ["-8", "-V", "-f", "-s", "-o", out.path, tmp])
+            return exec(flac, ["-8", "-V", "-f", "-s"] + threads + ["-o", out.path, tmp])
         case .imageAudio:
             return .failure("internal")
         }
@@ -456,15 +506,24 @@ final class Engine {
         let acodec = ["aac", "mp3"].contains(codec) ? ["-c:a", "copy"] : ["-c:a", "aac_at", "-b:a", "192k"]
         let args = ["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-nostats", "-progress", progress,
                     "-loop", "1", "-framerate", "1", "-i", image.path, "-i", audio.path,
-                    "-map", "0:v:0", "-map", "1:a:0", "-map_metadata", "1",
+                    "-map", "0:v:0", "-map", "1:a:0", "-map_metadata", "1", "-map_chapters", "1",
                     "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
-                    "-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage", "-r", "1"] + acodec + ["-shortest", "-movflags", "+faststart", out.path]
-        let r = exec(findTool("ffmpeg")!, args)
+                    "-r", "1"] + acodec + ["-shortest", "-movflags", "+faststart"]
+        var r = exec(findTool("ffmpeg")!, args + ["-c:v", "h264_videotoolbox", "-q:v", "65", out.path])
+        if case .failure = r { r = exec(findTool("ffmpeg")!, args + ["-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage", out.path]) }
+        else if !(hasVideo(out) && !audioCodec(out).isEmpty) {
+            try? FileManager.default.removeItem(at: out)
+            r = exec(findTool("ffmpeg")!, args + ["-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage", out.path])
+        }
         try? FileManager.default.removeItem(atPath: progress)
         switch r {
-        case .success:
+        case .success where hasVideo(out) && !audioCodec(out).isEmpty:
             Log.write("ok:   \(image.path) + \(audio.path) -> \(out.path)")
             finish(audioEntry, .done, output: out)
+        case .success:
+            try? FileManager.default.removeItem(at: out)
+            Log.write("FAIL: \(audio.path) video missing a stream")
+            finish(audioEntry, .failed, message: "the result was missing the picture or the sound, so it was deleted")
         case .failure(let m):
             try? FileManager.default.removeItem(at: out)
             let cancelled = job.cancelled || job.skipCurrent
@@ -670,6 +729,223 @@ final class ProgressWindowController: NSWindowController, NSTableViewDataSource,
     func windowShouldClose(_ sender: NSWindow) -> Bool { AppDelegate.shared.closeWindow(); return false }
 }
 
+// MARK: - Media Info window
+
+final class MediaInfoWindowController: NSWindowController {
+    let text = NSTextView()
+    init() {
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 420), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
+        w.title = "Media Info"; w.center(); w.setFrameAutosaveName("MediaInfoWindow")
+        super.init(window: w)
+        let sc = NSScrollView(); sc.hasVerticalScroller = true; sc.borderType = .noBorder
+        text.isEditable = false; text.isSelectable = true; text.font = .systemFont(ofSize: 14)
+        text.textContainerInset = NSSize(width: 12, height: 12)
+        text.setAccessibilityLabel("Media information")
+        text.isVerticallyResizable = true; text.autoresizingMask = [.width]
+        text.textContainer?.widthTracksTextView = true
+        sc.documentView = text
+        w.contentView = sc
+        w.initialFirstResponder = text
+    }
+    required init?(coder: NSCoder) { nil }
+    func show(_ urls: [URL]) {
+        let reports = urls.map { MediaInfo.report(for: $0) }
+        text.string = reports.joined(separator: "\n\n")
+        window?.title = urls.count == 1 ? "Media Info, \(urls[0].lastPathComponent)" : "Media Info, \(urls.count) files"
+        NSApp.activate(ignoringOtherApps: true)
+        showWindow(nil); window?.makeKeyAndOrderFront(nil); window?.makeFirstResponder(text)
+    }
+}
+
+// MARK: - Upgrades, duplicates, and Check for Updates
+
+enum Maintenance {
+    static let bundleID = "com.jakobrosin.convertify"
+    static var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0" }
+
+    /// After the app was replaced by a newer version: refresh registrations, drop temp files, remember the version.
+    static func afterUpgradeIfNeeded() {
+        let last = Prefs.d.string(forKey: "lastVersion") ?? ""
+        guard last != version else { return }
+        Log.write(last.isEmpty ? "first run of version \(version)" : "upgraded from \(last) to \(version)")
+        let lsr = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+        let p = Process(); p.executableURL = URL(fileURLWithPath: lsr); p.arguments = ["-f", Bundle.main.bundlePath]
+        p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice; try? p.run(); p.waitUntilExit()
+        FirstLaunch.refreshServices()
+        // stale temp files from older versions
+        let tmp = NSTemporaryDirectory()
+        if let items = try? FileManager.default.contentsOfDirectory(atPath: tmp) {
+            for f in items where f.hasPrefix("convertify-") { try? FileManager.default.removeItem(atPath: tmp + f) }
+        }
+        Prefs.d.set(version, forKey: "lastVersion")
+    }
+
+    /// Other copies of Convertify on this Mac (not counting mounted disk images).
+    static func duplicateCopies() -> [URL] {
+        let me = Bundle.main.bundleURL.standardizedFileURL
+        let all = NSWorkspace.shared.urlsForApplications(withBundleIdentifier: bundleID)
+        return all.map { $0.standardizedFileURL }.filter { $0 != me && !$0.path.hasPrefix("/Volumes/") && FileManager.default.fileExists(atPath: $0.path) }
+    }
+    static var runningFromApplications: Bool { Bundle.main.bundlePath.hasPrefix("/Applications/") }
+    static var runningFromDiskImageOrDownloads: Bool {
+        let p = Bundle.main.bundlePath
+        return p.hasPrefix("/Volumes/") || p.contains("/Downloads/") || p.contains("/Desktop/")
+    }
+
+    /// Offer to move to /Applications when run from a disk image or Downloads; offer to trash duplicates otherwise.
+    static func tidyCopies(on window: NSWindow, then: @escaping () -> Void) {
+        if !runningFromApplications && runningFromDiskImageOrDownloads {
+            let a = NSAlert()
+            a.messageText = "Install Convertify into Applications?"
+            a.informativeText = "Convertify is running from \(Bundle.main.bundlePath.hasPrefix("/Volumes/") ? "the disk image" : "the Downloads folder"). Copying it to the Applications folder and running it from there keeps the Finder services in one place and avoids leftover copies."
+            a.addButton(withTitle: "Install and Relaunch"); a.addButton(withTitle: "Not Now")
+            a.beginSheetModal(for: window) { r in
+                if r == .alertFirstButtonReturn { installIntoApplicationsAndRelaunch() } else { then() }
+            }
+            return
+        }
+        let dups = duplicateCopies()
+        guard runningFromApplications, !dups.isEmpty else { then(); return }
+        let a = NSAlert()
+        a.messageText = "Other copies of Convertify found"
+        a.informativeText = "Only the copy in the Applications folder should stay, otherwise macOS may register the Finder services from the wrong one. Move these to the Trash?\n\n" + dups.map { "• " + $0.path }.joined(separator: "\n")
+        a.addButton(withTitle: "Move to Trash"); a.addButton(withTitle: "Keep Them")
+        a.beginSheetModal(for: window) { r in
+            if r == .alertFirstButtonReturn {
+                for d in dups {
+                    do { try FileManager.default.trashItem(at: d, resultingItemURL: nil); Log.write("trashed duplicate copy: \(d.path)") }
+                    catch { Log.write("could not trash \(d.path): \(error.localizedDescription)") }
+                }
+                let lsr = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+                let p = Process(); p.executableURL = URL(fileURLWithPath: lsr); p.arguments = ["-f", Bundle.main.bundlePath]
+                p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice; try? p.run(); p.waitUntilExit()
+                FirstLaunch.refreshServices()
+            }
+            then()
+        }
+    }
+
+    static func installIntoApplicationsAndRelaunch() {
+        replaceInstalledApp(with: Bundle.main.bundleURL)
+    }
+
+    /// Replaces /Applications/Convertify.app with `source` and relaunches. Done by a detached shell so the running app can quit first.
+    static func replaceInstalledApp(with source: URL) {
+        let target = "/Applications/Convertify.app"
+        let script = """
+        sleep 1
+        rm -rf "\(target)"
+        ditto "\(source.path)" "\(target)"
+        xattr -dr com.apple.quarantine "\(target)" 2>/dev/null
+        case "\(source.path)" in "\(NSTemporaryDirectory())"*) rm -rf "\(source.path)";; esac
+        /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "\(target)"
+        /System/Library/CoreServices/pbs -flush; /System/Library/CoreServices/pbs -update
+        open "\(target)"
+        """
+        let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/zsh"); p.arguments = ["-c", script]
+        p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+        try? p.run()
+        Log.write("installing \(source.path) into \(target) and relaunching")
+        NSApp.terminate(nil)
+    }
+
+    // MARK: Check for Updates
+    // Manifest: {"version":"1.4","url":"https://.../Convertify.dmg","sha256":"...","size":123,"notes":["..."]}
+    static var manifestURL: String { Prefs.d.string(forKey: "updateManifestURL") ?? "" }
+
+    static func checkForUpdates(on window: NSWindow, quiet: Bool = false) {
+        guard let url = URL(string: manifestURL), !manifestURL.isEmpty else {
+            if !quiet {
+                let a = NSAlert(); a.messageText = "No update location set"
+                a.informativeText = "Convertify does not know where to look for updates. The person who gave you Convertify can provide a manifest address; set it with:\ndefaults write com.jakobrosin.convertify updateManifestURL \"https://...\""
+                a.beginSheetModal(for: window) { _ in }
+            }
+            return
+        }
+        var req = URLRequest(url: url); req.cachePolicy = .reloadIgnoringLocalCacheData; req.timeoutInterval = 20
+        URLSession.shared.dataTask(with: req) { data, _, err in
+            DispatchQueue.main.async {
+                guard let data = data, let m = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let newVersion = m["version"] as? String, let dl = m["url"] as? String, let dlURL = URL(string: dl) else {
+                    if !quiet { let a = NSAlert(); a.messageText = "Could not check for updates"; a.informativeText = err?.localizedDescription ?? "The update manifest could not be read."; a.beginSheetModal(for: window) { _ in } }
+                    return
+                }
+                if !isNewer(newVersion, than: version) {
+                    if !quiet { let a = NSAlert(); a.messageText = "Convertify is up to date"; a.informativeText = "Version \(version) is the newest."; a.beginSheetModal(for: window) { _ in } }
+                    return
+                }
+                let notes = (m["notes"] as? [String] ?? []).map { "• " + $0 }.joined(separator: "\n")
+                let a = NSAlert()
+                a.messageText = "Convertify \(newVersion) is available"
+                a.informativeText = "You have \(version).\n\n" + (notes.isEmpty ? "" : notes + "\n\n") + "Download and Install replaces the copy in Applications and relaunches. Nothing is left behind."
+                a.addButton(withTitle: "Download and Install"); a.addButton(withTitle: "Later")
+                a.beginSheetModal(for: window) { r in
+                    guard r == .alertFirstButtonReturn else { return }
+                    downloadAndInstall(dlURL, sha256: m["sha256"] as? String, size: m["size"] as? Int, on: window)
+                }
+            }
+        }.resume()
+    }
+
+    static func isNewer(_ a: String, than b: String) -> Bool {
+        let x = a.split(separator: ".").map { Int($0) ?? 0 }, y = b.split(separator: ".").map { Int($0) ?? 0 }
+        for i in 0..<max(x.count, y.count) {
+            let p = i < x.count ? x[i] : 0, q = i < y.count ? y[i] : 0
+            if p != q { return p > q }
+        }
+        return false
+    }
+
+    static func downloadAndInstall(_ url: URL, sha256: String?, size: Int?, on window: NSWindow) {
+        Log.write("downloading update from \(url)")
+        URLSession.shared.downloadTask(with: url) { tmp, _, err in
+            // The temporary download is deleted when this handler returns, so keep it now.
+            let dmg = URL(fileURLWithPath: NSTemporaryDirectory() + "convertify-update-\(UUID().uuidString).dmg")
+            var kept = false
+            if let tmp = tmp, (try? FileManager.default.moveItem(at: tmp, to: dmg)) != nil { kept = true }
+            DispatchQueue.main.async {
+                guard kept else { fail("The download failed. \(err?.localizedDescription ?? "")", window); return }
+                if let size = size, let real = try? FileManager.default.attributesOfItem(atPath: dmg.path)[.size] as? Int, real != size {
+                    try? FileManager.default.removeItem(at: dmg); fail("The downloaded file has the wrong size, so it was discarded.", window); return
+                }
+                if let sha = sha256?.lowercased(), !sha.isEmpty {
+                    let got = sha256Hex(of: dmg)
+                    if got != sha {
+                        Log.write("checksum mismatch: expected \(sha) got \(got)")
+                        try? FileManager.default.removeItem(at: dmg); fail("The downloaded file failed its checksum, so it was discarded.", window); return
+                    }
+                }
+                let mount = NSTemporaryDirectory() + "convertify-update-mount-\(UUID().uuidString)"
+                let att = runTool("/usr/bin/hdiutil", ["attach", "-nobrowse", "-readonly", "-mountpoint", mount, dmg.path])
+                guard att.status == 0 else { try? FileManager.default.removeItem(at: dmg); fail("The disk image could not be opened.", window); return }
+                let newApp = URL(fileURLWithPath: mount + "/Convertify.app")
+                guard FileManager.default.fileExists(atPath: newApp.path) else {
+                    _ = runTool("/usr/bin/hdiutil", ["detach", mount, "-force"]); try? FileManager.default.removeItem(at: dmg)
+                    fail("The disk image does not contain Convertify.", window); return
+                }
+                // Copy out of the image first so it can be detached, then replace and relaunch.
+                let staged = URL(fileURLWithPath: NSTemporaryDirectory() + "convertify-update-\(UUID().uuidString).app")
+                let copy = runTool("/usr/bin/ditto", [newApp.path, staged.path])
+                _ = runTool("/usr/bin/hdiutil", ["detach", mount, "-force"])
+                try? FileManager.default.removeItem(at: dmg)
+                guard copy.status == 0 else { fail("The new version could not be copied.", window); return }
+                replaceInstalledApp(with: staged)
+            }
+        }.resume()
+    }
+    static func sha256Hex(of url: URL) -> String {
+        guard let h = try? FileHandle(forReadingFrom: url) else { return "" }
+        defer { try? h.close() }
+        var hasher = SHA256()
+        while let chunk = try? h.read(upToCount: 4 * 1024 * 1024), !chunk.isEmpty { hasher.update(data: chunk) }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+    static func fail(_ msg: String, _ window: NSWindow) {
+        Log.write("update failed: \(msg)")
+        let a = NSAlert(); a.messageText = "Update not installed"; a.informativeText = msg; a.beginSheetModal(for: window) { _ in }
+    }
+}
+
 // MARK: - Preferences window
 
 final class PreferencesWindowController: NSWindowController {
@@ -762,6 +1038,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     static var shared: AppDelegate!
     var windowController: ProgressWindowController!
     var prefsController: PreferencesWindowController?
+    var infoController: MediaInfoWindowController?
     var quitTimer: Timer?
     var notificationsAllowed = false
 
@@ -897,6 +1174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         menu("Convertify") { m in
             item(m, "About Convertify", #selector(showAbout(_:)))
+            item(m, "Check for Updates…", #selector(checkForUpdates(_:)))
             m.addItem(.separator())
             item(m, "Preferences…", #selector(showPreferences(_:)), ",")
             m.addItem(.separator())
@@ -911,6 +1189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             item(m, "Reveal Source in Finder", #selector(revealSource(_:)), "r", [.command, .shift])
             item(m, "Retry This File", #selector(retry(_:)), "t")
             item(m, "Show Details", #selector(showDetails(_:)), "d")
+            item(m, "Media Info", #selector(mediaInfoForSelection(_:)), "i", [.command, .shift])
             m.addItem(.separator())
             item(m, "Close Window", #selector(closeWindowItem(_:)), "w")
         }
@@ -924,12 +1203,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             item(m, "Clear History…", #selector(clearHistory(_:)), String(UnicodeScalar(NSBackspaceCharacter)!), [.command, .shift])
         }
         menu("Convert") { m in
-            let groups: [[String]] = [["mp3", "mp3low", "aac", "opus", "ogg"], ["wav"], ["mp4", "mov", "imagevideo"], ["flac2wav", "wav2flac"]]
+            let groups: [[String]] = [["mp3", "mp3low", "aac", "opus", "ogg"], ["wav", "extractaudio"], ["mp4", "mov", "mkv", "imagevideo"], ["jpeg", "png"], ["flac2wav", "wav2flac"]]
             for (gi, g) in groups.enumerated() {
                 if gi > 0 { m.addItem(.separator()) }
                 for id in g { guard let p = Preset.byId(id) else { continue }
                     let it = NSMenuItem(title: p.title + "…", action: #selector(convertMenu(_:)), keyEquivalent: ""); it.representedObject = p.id; m.addItem(it) }
             }
+            m.addItem(.separator())
+            item(m, "Media Info…", #selector(mediaInfoChoose(_:)))
         }
         menu("Job") { m in
             item(m, "Cancel This File", #selector(cancelCurrent(_:)), ".")
@@ -963,6 +1244,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         m.addItem(withTitle: "Reveal Source in Finder", action: #selector(revealSource(_:)), keyEquivalent: "")
         m.addItem(withTitle: "Retry This File", action: #selector(retry(_:)), keyEquivalent: "")
         m.addItem(withTitle: "Show Details", action: #selector(showDetails(_:)), keyEquivalent: "")
+        m.addItem(withTitle: "Media Info", action: #selector(mediaInfoForSelection(_:)), keyEquivalent: "")
         m.addItem(withTitle: "Copy Row", action: #selector(copyRow(_:)), keyEquivalent: "")
         m.addItem(.separator())
         m.addItem(withTitle: "Remove from History", action: #selector(removeSelected(_:)), keyEquivalent: "")
@@ -978,7 +1260,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         case #selector(removeSelected(_:)): return windowController?.selectedEntries.contains { $0.isFinished } ?? false
         case #selector(clearHistory(_:)): return Engine.shared.entries.contains { $0.isFinished }
         case #selector(cancelCurrent(_:)), #selector(cancelAll(_:)): return Engine.shared.isBusy
-        case #selector(copyRow(_:)), #selector(showDetails(_:)): return e != nil
+        case #selector(copyRow(_:)), #selector(showDetails(_:)), #selector(mediaInfoForSelection(_:)): return e != nil
         default: return true
         }
     }
@@ -1042,7 +1324,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     @objc func cancelCurrent(_ sender: Any?) { Engine.shared.cancelCurrentFile() }
     @objc func cancelAll(_ sender: Any?) { Engine.shared.cancelAll() }
     @objc func closeWindowItem(_ sender: Any?) {
-        if NSApp.keyWindow == prefsController?.window { prefsController?.window?.orderOut(nil) } else { closeWindow() }
+        guard let key = NSApp.keyWindow else { closeWindow(); return }
+        if key == windowController.window { closeWindow() } else { key.orderOut(nil) }   // preferences, media info: just close that window
     }
     @objc func showPreferences(_ sender: Any?) {
         if prefsController == nil { prefsController = PreferencesWindowController() }
@@ -1053,7 +1336,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let ff = findTool("ffmpeg") ?? "not found"
         let credits = NSAttributedString(string: "Converts audio and video from the Finder Services menu.\n\nffmpeg: \(ff)\noggenc: \(findTool("oggenc") ?? "not found")\nflac: \(findTool("flac") ?? "not found")\n\nLog: \(Log.url.path)\nHistory: \(History.url.path)")
         NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits, .applicationName: "Convertify", .applicationVersion: "1.2"])
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits, .applicationName: "Convertify", .applicationVersion: "1.3"])
     }
     @objc func showHelp(_ sender: Any?) {
         let a = NSAlert()
@@ -1156,4 +1439,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     @objc func svc_mp4(_ p: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString>) { service("mp4", p) }
     @objc func svc_mov(_ p: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString>) { service("mov", p) }
     @objc func svc_imagevideo(_ p: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString>) { service("imagevideo", p) }
+    @objc func svc_mkv(_ p: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString>) { service("mkv", p) }
+    @objc func svc_extractaudio(_ p: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString>) { service("extractaudio", p) }
+    @objc func svc_jpeg(_ p: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString>) { service("jpeg", p) }
+    @objc func svc_png(_ p: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString>) { service("png", p) }
+    @objc func svc_mediainfo(_ p: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString>) {
+        let urls = files(from: p); Log.write("service Media Info: \(urls.count) file(s)"); showMediaInfo(urls)
+    }
+    func showMediaInfo(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        if infoController == nil { infoController = MediaInfoWindowController() }
+        infoController?.show(urls)
+    }
+    @objc func mediaInfoForSelection(_ sender: Any?) {
+        guard let e = windowController.selectedEntry else { NSSound.beep(); return }
+        let src = URL(fileURLWithPath: e.filePath)
+        let out = e.outputPath.map { URL(fileURLWithPath: $0) }
+        var list: [URL] = []
+        if FileManager.default.fileExists(atPath: src.path) { list.append(src) }
+        if let o = out, FileManager.default.fileExists(atPath: o.path) { list.append(o) }
+        if list.isEmpty { NSSound.beep(); return }
+        showMediaInfo(list)
+    }
+    @objc func mediaInfoChoose(_ sender: Any?) {
+        let panel = NSOpenPanel(); panel.allowsMultipleSelection = true; panel.canChooseDirectories = false
+        panel.message = "Choose files to inspect"
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, !panel.urls.isEmpty { showMediaInfo(panel.urls) }
+    }
+    @objc func checkForUpdates(_ sender: Any?) {
+        showWindow(nil)
+        if let w = windowController.window { Maintenance.checkForUpdates(on: w) }
+    }
 }
