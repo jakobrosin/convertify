@@ -28,7 +28,7 @@ hdiutil create -volname Convertify -srcfolder "$STAGE" -ov -format UDZO Converti
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$PWD/$STAGE/Convertify.app" >/dev/null 2>&1 || true
 rm -rf "$STAGE"
 VERSION=$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")
-rm -f Convertify-macos-*.zip
+setopt null_glob; rm -f Convertify-macos-*.zip; unsetopt null_glob
 ditto -c -k --keepParent "$APP" "Convertify-macos-$VERSION.zip"     # the in-app updater downloads this one
 echo "zip for the updater: Convertify-macos-$VERSION.zip"
 SHA=$(shasum -a 256 Convertify.dmg | cut -d' ' -f1); SIZE=$(stat -f %z Convertify.dmg)
